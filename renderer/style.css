@@ -74,6 +74,21 @@ body { display: flex; flex-direction: column; }
 
 .panel[hidden] { display: none; }
 
+.panel-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.card-head h2 { margin: 0; }
+.card-tools { display: flex; align-items: center; gap: 8px; }
+.card-tools .hint { margin: 0; }
+
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -172,6 +187,61 @@ textarea {
 .tbl td.missing { color: var(--err); }
 .tbl td.muted { color: var(--muted); }
 .tbl tbody:empty::after { content: ''; }
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.section-toggle .caret {
+  color: var(--muted);
+  display: inline-block;
+  transition: transform .12s ease;
+}
+.section-toggle.open .caret { transform: rotate(90deg); }
+.section-toggle .hint { margin: 0 0 0 auto; }
+
+.proj-tbl { margin-top: 8px; }
+.proj-tbl th { white-space: nowrap; }
+.proj-tbl td { white-space: nowrap; }
+.proj-tbl .mono { font-family: var(--mono); }
+.proj-tbl tr.bad td { background: rgba(239, 107, 107, .06); }
+.proj-tbl td.actions {
+  text-align: right;
+  padding-right: 0;
+}
+.proj-tbl td.actions .btn { margin-left: 6px; }
+.proj-tbl .col-actions { text-align: right; }
+.proj-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 0;
+  font-family: inherit;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 18px;
+}
+.chip.api { color: #9db8ff; border-color: #2f5ea8; background: rgba(79, 140, 255, .12); }
+.chip.web { color: #9fdcc0; border-color: #2f6b52; background: rgba(63, 191, 127, .12); }
+.chip.ok { color: #7fd6a8; border-color: #2f6b52; background: rgba(63, 191, 127, .12); }
+.chip.warn { color: #e9c97a; border-color: #7a6127; background: rgba(227, 179, 65, .12); }
+.chip.bad { color: #f0a3a3; border-color: #7a3232; background: rgba(239, 107, 107, .12); }
 
 .console-wrap {
   height: 220px;

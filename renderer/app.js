@@ -96,6 +96,12 @@ function fillForm(profile) {
   field(form, 'username').value = profile.username || '';
   field(form, 'auth').value = profile.auth || 'key';
   field(form, 'keyPath').value = profile.keyPath || '';
+  field(form, 'password').placeholder = profile.hasPassword
+    ? '已保存在本地，留空表示不修改'
+    : '输入密码后点保存，会加密存在本地';
+  field(form, 'passphrase').placeholder = profile.hasPassphrase
+    ? '已保存在本地，留空表示不修改'
+    : '留空表示不修改';
   syncAuthFields();
 }
 
@@ -123,6 +129,10 @@ $('#profileForm').addEventListener('submit', async (e) => {
   const r = await window.api.profiles.save(payload);
   if (r.ok) {
     appendLog('info', `已保存连接 ${r.profile.name}\n`);
+    if (payload.password) {
+      if (state.canStoreSecrets) appendLog('ok', '密码已加密保存在本地，之后测试连接、上传、迁移都不必再输入\n');
+      else appendLog('err', '系统不支持安全存储，密码没有保存\n');
+    }
     field(form, 'passphrase').value = '';
     field(form, 'password').value = '';
     await refreshProfiles(r.profile.id);
@@ -148,6 +158,9 @@ $('#btnNewProfile').addEventListener('click', () => {
 $('#profileSelect').addEventListener('change', (e) => {
   state.activeId = e.target.value;
   fillForm(state.profiles.find((p) => p.id === state.activeId));
+  proj.server = new Map();
+  proj.loaded = false;
+  renderProjects();
 });
 
 // ── tabs ────────────────────────────────────────────────────
@@ -157,6 +170,7 @@ const PANELS = $$('.panel');
 function showTab(name) {
   for (const t of TABS) t.classList.toggle('active', t.dataset.tab === name);
   for (const p of PANELS) p.hidden = p.id !== `tab-${name}`;
+  if (name === 'project' && !proj.loaded) refreshServerState({ quiet: true });
 }
 
 for (const t of TABS) t.addEventListener('click', () => showTab(t.dataset.tab));
@@ -201,18 +215,240 @@ $('#btnProbe').addEventListener('click', async (e) => {
   $('#st-apps').textContent = r.apps.join(', ') || '无';
   $('#st-repos').textContent = r.repos.length ? `${r.repos.join(', ')} (钩子 ${r.hooks})` : '无';
   appendLog('ok', '状态采集完成\n');
+  await refreshServerState({ quiet: true });
 });
+
+// ── projects ────────────────────────────────────────────────
+const proj = { rows: [], server: new Map(), loaded: false, baseText: '' };
+const NAME_RE = /^[a-z][a-z0-9-]{2,30}$/;
+const DBNAME_RE = /^[a-z][a-z0-9_]{2,30}$/;
+
+function parseConf(text) {
+  const rows = [];
+  const names = new Set();
+  for (const raw of (text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const [name, type, port, domain, api, db] = line.split(/\s+/);
+    if (!type) continue;
+    rows.push({
+      name,
+      type,
+      port: port || '-',
+      domain: domain || '-',
+      api: api || '-',
+      db: db || 'mysql',
+      problems: [],
+    });
+    names.add(name);
+  }
+
+  const seen = new Set();
+  for (const r of rows) {
+    if (!NAME_RE.test(r.name)) r.problems.push('名称不合法');
+    if (seen.has(r.name)) r.problems.push('项目重复');
+    seen.add(r.name);
+    if (r.type !== 'api' && r.type !== 'web') r.problems.push('类型只支持 api / web');
+    if (r.port !== '-' && !/^\d+$/.test(r.port)) r.problems.push('端口不是数字');
+    if (r.type === 'web' && r.api !== '-' && !names.has(r.api)) r.problems.push(`上游 ${r.api} 未定义`);
+    if (r.type === 'api' && !['mysql', 'none'].includes(r.db) && !DBNAME_RE.test(r.db)) {
+      r.problems.push('db 只能是 mysql / none / 库名');
+    }
+  }
+  return rows;
+}
+
+function syncProjects() {
+  proj.rows = parseConf($('#confText').value);
+  renderProjects();
+  $('#confDirty').hidden = $('#confText').value === proj.baseText;
+}
+
+function makeCell(text, cls) {
+  const td = document.createElement('td');
+  td.textContent = text;
+  if (cls) td.className = cls;
+  return td;
+}
+
+function dbCellOf(row) {
+  if (row.type !== 'api') return makeCell('—', 'muted');
+  if (row.db === 'none') return makeCell('未启用', 'muted');
+  if (!proj.loaded) return makeCell(row.db === 'mysql' ? '待创建' : row.db, 'muted');
+  const s = proj.server.get(row.name);
+  if (!s || !s.db || s.db === '-') return makeCell('未启用', 'muted');
+  if (!s.exists) return makeCell(`${s.db} · 缺失`, 'missing mono');
+  return makeCell(`${s.db} · ${s.tables} 表 · ${s.size}`, 'mono');
+}
+
+function statusCellOf(row) {
+  const td = document.createElement('td');
+  const chip = document.createElement('span');
+  if (row.problems.length) {
+    chip.className = 'chip bad';
+    chip.textContent = '配置有误';
+    td.title = row.problems.join('；');
+  } else if (!proj.loaded) {
+    chip.className = 'chip';
+    chip.textContent = '未知';
+  } else if (proj.server.has(row.name)) {
+    chip.className = 'chip ok';
+    chip.textContent = '已部署';
+  } else {
+    chip.className = 'chip warn';
+    chip.textContent = '待初始化';
+  }
+  td.appendChild(chip);
+  return td;
+}
+
+function actionsCellOf(row) {
+  const td = document.createElement('td');
+  td.className = 'actions';
+  if (row.type !== 'api') return td;
+  const deployed = proj.server.has(row.name);
+  for (const [action, label] of [['migrate', '迁移'], ['dump', '备份']]) {
+    const b = document.createElement('button');
+    b.className = 'btn tiny';
+    b.textContent = label;
+    b.dataset.action = action;
+    b.dataset.app = row.name;
+    b.disabled = !deployed;
+    if (!deployed) b.title = '先在服务器上初始化并部署这个项目';
+    td.appendChild(b);
+  }
+  return td;
+}
+
+function renderProjects() {
+  const tbody = $('#projTable tbody');
+  tbody.textContent = '';
+
+  if (!proj.rows.length) {
+    const tr = document.createElement('tr');
+    const td = makeCell('还没有项目。点下面「+ 新增项目」，或展开原始配置从本地 / 服务器加载。', 'proj-empty');
+    td.colSpan = 8;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  } else {
+    for (const row of proj.rows) {
+      const tr = document.createElement('tr');
+      if (row.problems.length) tr.className = 'bad';
+      tr.appendChild(makeCell(row.name, 'mono'));
+
+      const typeTd = document.createElement('td');
+      const chip = document.createElement('span');
+      const kind = row.type === 'api' ? 'api' : row.type === 'web' ? 'web' : 'bad';
+      chip.className = `chip ${kind}`;
+      chip.textContent = row.type || '?';
+      typeTd.appendChild(chip);
+      tr.appendChild(typeTd);
+
+      tr.appendChild(makeCell(row.port, 'mono'));
+      tr.appendChild(makeCell(row.domain === '-' ? '—' : row.domain, 'mono'));
+      tr.appendChild(makeCell(row.api === '-' ? '—' : row.api, 'mono'));
+      tr.appendChild(dbCellOf(row));
+      tr.appendChild(statusCellOf(row));
+      tr.appendChild(actionsCellOf(row));
+      tbody.appendChild(tr);
+    }
+  }
+
+  const api = proj.rows.filter((r) => r.type === 'api').length;
+  const web = proj.rows.filter((r) => r.type === 'web').length;
+  const bad = proj.rows.filter((r) => r.problems.length).length;
+  const deployed = proj.rows.filter((r) => proj.server.has(r.name)).length;
+
+  const parts = [];
+  if (proj.rows.length) {
+    parts.push(`${proj.rows.length} 个项目`, `${api} 后端`, `${web} 前端`);
+    parts.push(proj.loaded ? `已部署 ${deployed}/${proj.rows.length}` : '服务器状态未加载');
+  } else {
+    parts.push('配置为空');
+  }
+  if (bad) parts.push(`${bad} 行有误`);
+
+  const summary = $('#projSummary');
+  summary.textContent = parts.join(' · ');
+  summary.style.color = bad ? 'var(--err)' : '';
+}
+
+async function refreshServerState({ quiet = false } = {}) {
+  if (!state.activeId) {
+    if (!quiet) appendLog('err', '先在「服务器」页选择一个连接\n');
+    return false;
+  }
+  const r = await window.api.db.list(state.activeId);
+  if (!r.ok) {
+    if (!quiet) appendLog('err', `读取服务器项目失败: ${r.error}\n`);
+    proj.loaded = false;
+    renderProjects();
+    return false;
+  }
+  proj.server = new Map(r.rows.map((row) => [row.name, row]));
+  proj.loaded = true;
+  renderProjects();
+  return true;
+}
+
+async function runDbAction(action, app, btn) {
+  if (!state.activeId) {
+    appendLog('err', '先选择一个连接\n');
+    return;
+  }
+  const label = action === 'migrate' ? '迁移' : '备份';
+  setBusy(btn, true, '…');
+  const r = await window.api.db.run({ id: state.activeId, app, action });
+  setBusy(btn, false);
+  if (!r.ok) {
+    appendLog('err', `${app} ${label}失败: ${r.error || `退出码 ${r.code}`}\n`);
+    return;
+  }
+  appendLog('ok', `${app} ${label}完成\n`);
+  if (action === 'migrate') await refreshServerState({ quiet: true });
+}
 
 // ── projects.conf ───────────────────────────────────────────
 function setConfPath(p) {
-  $('#confPathHint').textContent = p ? `当前来源：${p}` : '';
+  $('#confPathHint').textContent = p ? `来源：${p}` : '';
 }
 
 async function loadConf() {
   const r = await window.api.conf.load();
   $('#confText').value = r.text || '';
+  proj.baseText = $('#confText').value;
   setConfPath(r.path);
+  syncProjects();
 }
+
+$('#confText').addEventListener('input', syncProjects);
+
+$('#btnToggleConf').addEventListener('click', () => {
+  const box = $('#confBox');
+  box.hidden = !box.hidden;
+  $('#btnToggleConf').classList.toggle('open', !box.hidden);
+});
+
+function nextProjectName() {
+  const used = new Set(proj.rows.map((r) => r.name));
+  if (!used.has('new-api')) return 'new-api';
+  for (let i = 2; i < 100; i += 1) {
+    if (!used.has(`new-api-${i}`)) return `new-api-${i}`;
+  }
+  return 'new-api';
+}
+
+$('#btnAddProject').addEventListener('click', () => {
+  const box = $('#confBox');
+  box.hidden = false;
+  $('#btnToggleConf').classList.add('open');
+  const ta = $('#confText');
+  const sep = ta.value && !ta.value.endsWith('\n') ? '\n' : '';
+  ta.value += `${sep}${nextProjectName().padEnd(11)} api   -      -                   -           mysql\n`;
+  syncProjects();
+  ta.focus();
+  ta.scrollTop = ta.scrollHeight;
+});
 
 $('#btnLoadLocalConf').addEventListener('click', async () => {
   const r = await window.api.conf.pickFile();
@@ -221,7 +457,9 @@ $('#btnLoadLocalConf').addEventListener('click', async () => {
     return;
   }
   $('#confText').value = r.text;
+  proj.baseText = r.text;
   setConfPath(r.path);
+  syncProjects();
   appendLog('info', `已从本地加载 ${r.path}\n`);
 });
 
@@ -231,6 +469,8 @@ $('#btnSaveLocalConf').addEventListener('click', async () => {
     if (!r.canceled) appendLog('err', `${r.error || '保存失败'}\n`);
     return;
   }
+  proj.baseText = $('#confText').value;
+  syncProjects();
   setConfPath(r.path);
   appendLog('ok', `已保存到 ${r.path}\n`);
 });
@@ -246,13 +486,25 @@ $('#btnApplyConf').addEventListener('click', async (e) => {
     appendLog('err', 'projects.conf 是空的\n');
     return;
   }
+  const bad = proj.rows.filter((r) => r.problems.length);
+  if (bad.length) {
+    appendLog('err', `有 ${bad.length} 行配置不对，先改掉再应用\n`);
+    return;
+  }
+
   const btn = e.currentTarget;
   setBusy(btn, true, '应用中…');
   await window.api.conf.save(text);
   const r = await window.api.conf.apply({ id: state.activeId, text, scriptsDir });
   setBusy(btn, false);
-  if (r.ok) appendLog('ok', '\napply.sh 执行成功\n');
-  else appendLog('err', `\n执行失败: ${r.error || `退出码 ${r.code}`}\n`);
+  if (r.ok) {
+    proj.baseText = text;
+    syncProjects();
+    appendLog('ok', '\napply.sh 执行成功\n');
+    await refreshServerState({ quiet: true });
+  } else {
+    appendLog('err', `\n执行失败: ${r.error || `退出码 ${r.code}`}\n`);
+  }
 });
 
 $('#btnDownloadConf').addEventListener('click', async (e) => {
@@ -263,80 +515,26 @@ $('#btnDownloadConf').addEventListener('click', async (e) => {
   setBusy(btn, false);
   if (r.ok) {
     $('#confText').value = r.text;
+    proj.baseText = r.text;
     setConfPath('/opt/deploy/projects.conf（服务器）');
+    syncProjects();
     appendLog('ok', '已从服务器下载 projects.conf\n');
   } else appendLog('err', r.error + '\n');
 });
 
-// ── database ────────────────────────────────────────────────
-function renderDbRows(rows) {
-  const tbody = $('#dbTable tbody');
-  const sel = $('#dbProject');
-  const prev = sel.value;
-  tbody.textContent = '';
-  sel.textContent = '';
-  for (const row of rows) {
-    const tr = document.createElement('tr');
-    const cells = [
-      [row.name, ''],
-      [row.db || '—', 'muted'],
-      [row.exists ? '已建库' : '缺失', row.exists ? 'present' : 'missing'],
-      [row.size || '-', 'muted'],
-      [row.tables || '-', 'muted'],
-    ];
-    for (const [text, cls] of cells) {
-      const td = document.createElement('td');
-      td.textContent = text;
-      if (cls) td.className = cls;
-      tr.appendChild(td);
-    }
-    tbody.appendChild(tr);
-    const opt = document.createElement('option');
-    opt.value = row.name;
-    opt.textContent = row.db ? `${row.name} (${row.db})` : `${row.name} (无数据库)`;
-    sel.appendChild(opt);
-  }
-  if (prev) sel.value = prev;
-}
-
-$('#btnDbRefresh').addEventListener('click', async (e) => {
-  if (!state.activeId) {
-    appendLog('err', '先选择一个连接\n');
-    return;
-  }
+$('#btnProjRefresh').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   setBusy(btn, true, '刷新中…');
-  const r = await window.api.db.list(state.activeId);
+  const ok = await refreshServerState();
   setBusy(btn, false);
-  if (!r.ok) {
-    appendLog('err', `${r.error}\n`);
-    return;
-  }
-  renderDbRows(r.rows);
-  appendLog('ok', `数据库清单已刷新（${r.rows.length} 个项目）\n`);
+  if (ok) appendLog('ok', '服务器项目状态已刷新\n');
 });
 
-async function runDbAction(action, label) {
-  if (!state.activeId) {
-    appendLog('err', '先选择一个连接\n');
-    return null;
-  }
-  const app = $('#dbProject').value;
-  if (!app) {
-    appendLog('err', '先刷新清单并选一个项目\n');
-    return null;
-  }
-  const btn = $(action === 'migrate' ? '#btnDbMigrate' : '#btnDbBackup');
-  setBusy(btn, true, `${label}中…`);
-  const r = await window.api.db.run({ id: state.activeId, app, action });
-  setBusy(btn, false);
-  if (!r.ok) appendLog('err', `${r.error || `退出码 ${r.code}`}\n`);
-  else appendLog('ok', `${label}完成\n`);
-  return r;
-}
-
-$('#btnDbMigrate').addEventListener('click', () => runDbAction('migrate', '迁移'));
-$('#btnDbBackup').addEventListener('click', () => runDbAction('dump', '备份'));
+$('#projTable').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn || btn.disabled) return;
+  await runDbAction(btn.dataset.action, btn.dataset.app, btn);
+});
 
 $('#btnPickScripts').addEventListener('click', async () => {
   const dir = await window.api.pickDir();

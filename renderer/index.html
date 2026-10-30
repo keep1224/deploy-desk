@@ -77,51 +77,68 @@
       </section>
     </main>
 
-    <main class="panel" id="tab-project" hidden>
+    <main class="panel panel-single" id="tab-project" hidden>
       <section class="card">
-        <h2>项目配置 <code>projects.conf</code></h2>
-        <div class="row">
-          <label class="grow">本地脚本目录（scripts/deploy）
-            <input id="scriptsDir" placeholder="例如 D:\code\my-api\scripts\deploy" />
-          </label>
-          <button id="btnPickScripts" class="btn narrow-btn">选择</button>
+        <div class="card-head">
+          <h2>项目</h2>
+          <div class="card-tools">
+            <span id="projSummary" class="hint">—</span>
+            <span id="confDirty" class="chip warn" hidden>未应用</span>
+            <button id="btnProjRefresh" class="btn">刷新服务器状态</button>
+            <button id="btnApplyConf" class="btn primary">应用更改</button>
+          </div>
         </div>
 
-        <div class="row actions">
-          <button id="btnLoadLocalConf" class="btn">从本地文件加载</button>
-          <button id="btnDownloadConf" class="btn">从服务器下载</button>
-          <button id="btnSaveLocalConf" class="btn">另存为本地</button>
-          <span id="confPathHint" class="hint"></span>
-        </div>
+        <table class="tbl proj-tbl" id="projTable">
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>类型</th>
+              <th>端口</th>
+              <th>域名</th>
+              <th>上游</th>
+              <th>数据库</th>
+              <th>状态</th>
+              <th class="col-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
 
-        <textarea id="confText" spellcheck="false" rows="11" placeholder="app-a-web   web   -      app-a.example.com   app-a-api   none
-app-a-api   api   3001   -                   -           mysql"></textarea>
-
         <div class="row actions">
-          <button id="btnApplyConf" class="btn primary">上传并应用</button>
-          <span class="hint">执行 /opt/deploy/apply.sh，幂等；已存在的 .env、数据库、nginx 块不会被覆盖</span>
+          <button id="btnAddProject" class="btn">+ 新增项目</button>
+          <span class="hint">会在原始配置末尾追加一行模板，改完点右上角「应用更改」</span>
         </div>
       </section>
 
       <section class="card">
-        <h2>数据库</h2>
-        <div class="row">
-          <button id="btnDbRefresh" class="btn">刷新清单</button>
-          <select id="dbProject" class="grow"></select>
-          <button id="btnDbMigrate" class="btn">执行迁移</button>
-          <button id="btnDbBackup" class="btn">备份</button>
+        <button type="button" class="section-toggle" id="btnToggleConf">
+          <span class="caret">▸</span> 原始配置 <code>projects.conf</code>
+          <span id="confPathHint" class="hint"></span>
+        </button>
+
+        <div id="confBox" hidden>
+          <div class="row">
+            <label class="grow">本地脚本目录（scripts/deploy）
+              <input id="scriptsDir" placeholder="例如 D:\code\my-api\scripts\deploy" />
+            </label>
+            <button id="btnPickScripts" class="btn narrow-btn">选择</button>
+          </div>
+
+          <div class="row actions">
+            <button id="btnLoadLocalConf" class="btn">从本地文件加载</button>
+            <button id="btnDownloadConf" class="btn">从服务器下载</button>
+            <button id="btnSaveLocalConf" class="btn">另存为本地</button>
+          </div>
+
+          <textarea id="confText" spellcheck="false" rows="12" placeholder="app-a-web   web   -      app-a.example.com   app-a-api   none
+app-a-api   api   3001   -                   -           mysql"></textarea>
+
+          <p class="hint">
+            列顺序：名称 · 类型 · 端口 · 域名 · 上游 api · db。db 写 <code>mysql</code> 建库（库名为项目名把 - 换成 _）、
+            写 <code>none</code> 不建库、也可直接写库名。应用会执行 <code>/opt/deploy/apply.sh</code>，幂等。
+          </p>
         </div>
-        <table class="tbl" id="dbTable">
-          <thead>
-            <tr><th>项目</th><th>库名</th><th>状态</th><th>大小</th><th>表</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <p class="hint">
-          api 项目建库时写入各自的 .env（库名/密码都在里面）；备份落在服务器
-          <code>/var/backups/&lt;项目&gt;-时间.sql.gz</code>。conf 里 db 列写
-          <code>none</code> 可跳过建库。
-        </p>
       </section>
     </main>
 
