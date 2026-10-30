@@ -507,10 +507,10 @@ ipcMain.handle('dialog:pickDir', async () => {
 // ── window ──────────────────────────────────────────────────
 function createWindow() {
   win = new BrowserWindow({
-    width: 1080,
-    height: 800,
-    minWidth: 900,
-    minHeight: 620,
+    width: 1280,
+    height: 820,
+    minWidth: 1120,
+    minHeight: 640,
     backgroundColor: '#12151b',
     title: 'Deploy Desk',
     webPreferences: {

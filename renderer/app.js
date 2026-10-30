@@ -71,7 +71,8 @@ async function refreshProfiles(selectId) {
   for (const p of data.profiles) {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name || p.host} (${p.username}@${p.host}:${p.port})`;
+    opt.textContent = p.name || p.host;
+    opt.title = `${p.name || p.host} (${p.username}@${p.host}:${p.port})`;
     select.appendChild(opt);
   }
 
@@ -162,7 +163,7 @@ $('#profileSelect').addEventListener('change', (e) => {
 });
 
 // ── tabs ────────────────────────────────────────────────────
-const TABS = $$('.tab');
+const TABS = $$('.nav-item');
 const PANELS = $$('.panel');
 
 function showTab(name) {
@@ -272,12 +273,12 @@ function makeCell(text, cls) {
 function dbCellOf(row) {
   if (row.type !== 'api') return makeCell('—', 'muted');
   if (row.db === 'none') return makeCell('未启用', 'muted');
-  if (!proj.loaded) return makeCell(row.db === 'mysql' ? '待创建' : row.db, 'muted');
   const s = proj.server.get(row.name);
-  if (!s) return makeCell(row.db === 'mysql' ? '待创建' : row.db, 'muted');
+  if (!s) return makeCell('待创建', 'muted');
   if (!s.db || s.db === '-') return makeCell('未启用', 'muted');
-  if (!s.exists) return makeCell(`${s.db} · 缺失`, 'missing mono');
-  return makeCell(`${s.db} · ${s.tables} 表 · ${s.size}`, 'mono');
+  const td = makeCell(s.exists ? `${s.tables} 表 · ${s.size}` : '缺失', s.exists ? 'mono' : 'missing mono');
+  td.title = s.db;
+  return td;
 }
 
 function statusCellOf(row) {
@@ -344,8 +345,12 @@ function renderProjects() {
       tr.appendChild(typeTd);
 
       tr.appendChild(makeCell(row.port, 'mono'));
-      tr.appendChild(makeCell(row.domain === '-' ? '—' : row.domain, 'mono'));
-      tr.appendChild(makeCell(row.api === '-' ? '—' : row.api, 'mono'));
+      const domainTd = makeCell(row.domain === '-' ? '—' : row.domain, 'mono ell');
+      domainTd.title = row.domain;
+      tr.appendChild(domainTd);
+      const apiTd = makeCell(row.api === '-' ? '—' : row.api, 'mono ell');
+      apiTd.title = row.api;
+      tr.appendChild(apiTd);
       tr.appendChild(dbCellOf(row));
       tr.appendChild(statusCellOf(row));
       tr.appendChild(actionsCellOf(row));
@@ -608,4 +613,5 @@ $('#btnClear').addEventListener('click', () => {
   await refreshProfiles();
   await loadConf();
   syncAuthFields();
+  showTab('project');
 })();
