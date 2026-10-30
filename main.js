@@ -78,7 +78,7 @@ function connect(profile) {
   });
 }
 
-function exec(conn, cmd) {
+function exec(conn, cmd, { silent = false } = {}) {
   return new Promise((resolve, reject) => {
     conn.exec(cmd, (err, stream) => {
       if (err) return reject(err);
@@ -86,12 +86,12 @@ function exec(conn, cmd) {
       let errOut = '';
       stream.on('data', (d) => {
         out += d.toString();
-        log('out', d.toString());
+        if (!silent) log('out', d.toString());
       });
       if (stream.stderr) {
         stream.stderr.on('data', (d) => {
           errOut += d.toString();
-          log('err', d.toString());
+          if (!silent) log('err', d.toString());
         });
       }
       stream.on('close', (code) => resolve({ code: code ?? 0, out, err: errOut }));
@@ -301,11 +301,50 @@ ipcMain.handle('server:probe', async (_e, id) => {
 const confPath = () => path.join(app.getPath('userData'), 'projects.conf');
 
 ipcMain.handle('conf:load', () => {
-  try {
-    return { ok: true, text: fs.readFileSync(confPath(), 'utf8') };
-  } catch {
-    return { ok: true, text: '' };
+  const store = readStore();
+  const candidates = [
+    store.confPath,
+    confPath(),
+    store.scriptsDir ? path.join(store.scriptsDir, 'projects.conf') : null,
+  ].filter(Boolean);
+  for (const p of candidates) {
+    try {
+      return { ok: true, text: fs.readFileSync(p, 'utf8'), path: p };
+    } catch {}
   }
+  return { ok: true, text: '', path: '' };
+});
+
+ipcMain.handle('conf:pickFile', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择 projects.conf',
+    properties: ['openFile'],
+    filters: [
+      { name: '配置文件', extensions: ['conf', 'txt', 'cfg'] },
+      { name: '全部文件', extensions: ['*'] },
+    ],
+  });
+  if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+  const file = r.filePaths[0];
+  const text = fs.readFileSync(file, 'utf8');
+  const store = readStore();
+  store.confPath = file;
+  writeStore(store);
+  return { ok: true, path: file, text };
+});
+
+ipcMain.handle('conf:saveAs', async (_e, text) => {
+  const r = await dialog.showSaveDialog(win, {
+    title: '另存 projects.conf',
+    defaultPath: 'projects.conf',
+    filters: [{ name: '配置文件', extensions: ['conf'] }],
+  });
+  if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+  fs.writeFileSync(r.filePath, text, 'utf8');
+  const store = readStore();
+  store.confPath = r.filePath;
+  writeStore(store);
+  return { ok: true, path: r.filePath };
 });
 
 ipcMain.handle('conf:save', (_e, text) => {
@@ -336,7 +375,7 @@ ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
   try {
     const profile = resolveProfile(id);
     if (!scriptsDir) throw new Error('未设置脚本目录（scripts/deploy）');
-    const names = ['apply.sh', 'add-project.sh', 'post-receive'];
+    const names = ['apply.sh', 'add-project.sh', 'post-receive', 'db.sh'];
     for (const n of names) {
       if (!fs.existsSync(path.join(scriptsDir, n))) throw new Error(`缺少脚本: ${path.join(scriptsDir, n)}`);
     }
@@ -361,6 +400,45 @@ ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
 
     fs.writeFileSync(confPath(), text, 'utf8');
     return { ok: result.code === 0, code: result.code, out: result.out };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// ── ipc: database ───────────────────────────────────────────
+ipcMain.handle('db:list', async (_e, id) => {
+  try {
+    const profile = resolveProfile(id);
+    const r = await withConn(profile, (conn) =>
+      exec(conn, 'bash /opt/deploy/db.sh list 2>/dev/null', { silent: true }),
+    );
+    const rows = r.out
+      .split('\n')
+      .map((l) => l.split('\t'))
+      .filter((c) => c.length >= 4 && c[0])
+      .map(([name, db, exists, size, tables]) => ({
+        name,
+        db,
+        exists: exists === 'yes',
+        size: size || '-',
+        tables: tables || '-',
+      }));
+    return { ok: true, rows };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('db:run', async (_e, { id, app, action }) => {
+  try {
+    const profile = resolveProfile(id);
+    if (!/^[a-z][a-z0-9-]{2,30}$/.test(app || '')) throw new Error('项目名不合法');
+    if (action !== 'migrate' && action !== 'dump') throw new Error('未知操作');
+    log('info', `\n$ db.sh ${action} ${app}`);
+    const r = await withConn(profile, (conn) =>
+      exec(conn, `bash /opt/deploy/db.sh ${action} ${app} 2>&1`),
+    );
+    return { ok: r.code === 0, code: r.code, out: r.out };
   } catch (err) {
     return { ok: false, error: err.message };
   }

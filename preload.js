@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld('api', {
     save: (text) => ipcRenderer.invoke('conf:save', text),
     download: (id) => ipcRenderer.invoke('conf:download', id),
     apply: (payload) => ipcRenderer.invoke('conf:apply', payload),
+    pickFile: () => ipcRenderer.invoke('conf:pickFile'),
+    saveAs: (text) => ipcRenderer.invoke('conf:saveAs', text),
+  },
+  db: {
+    list: (id) => ipcRenderer.invoke('db:list', id),
+    run: (payload) => ipcRenderer.invoke('db:run', payload),
   },
   deploy: {
     push: (payload) => ipcRenderer.invoke('deploy:push', payload),

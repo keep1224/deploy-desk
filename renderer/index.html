@@ -8,19 +8,28 @@
   </head>
   <body>
     <header class="bar">
-      <div class="brand">Deploy Desk</div>
+      <div class="bar-left">
+        <div class="brand">Deploy Desk</div>
+        <nav class="tabs">
+          <button class="tab active" data-tab="server">服务器</button>
+          <button class="tab" data-tab="project">项目</button>
+          <button class="tab" data-tab="publish">发布</button>
+        </nav>
+      </div>
       <div class="bar-group">
         <label for="profileSelect">连接</label>
         <select id="profileSelect"></select>
-        <button id="btnTest" class="btn">测试连接</button>
-        <button id="btnProbe" class="btn">采集状态</button>
         <span id="connDot" class="dot" title="未连接"></span>
       </div>
     </header>
 
-    <main class="grid">
+    <main class="panel" id="tab-server">
       <section class="card">
         <h2>服务器状态</h2>
+        <div class="row actions">
+          <button id="btnTest" class="btn">测试连接</button>
+          <button id="btnProbe" class="btn">采集状态</button>
+        </div>
         <dl id="status" class="kv">
           <dt>Node</dt><dd id="st-node">—</dd>
           <dt>pnpm</dt><dd id="st-pnpm">—</dd>
@@ -66,8 +75,10 @@
           <p id="secretHint" class="hint"></p>
         </form>
       </section>
+    </main>
 
-      <section class="card span2">
+    <main class="panel" id="tab-project" hidden>
+      <section class="card">
         <h2>项目配置 <code>projects.conf</code></h2>
         <div class="row">
           <label class="grow">本地脚本目录（scripts/deploy）
@@ -75,15 +86,46 @@
           </label>
           <button id="btnPickScripts" class="btn narrow-btn">选择</button>
         </div>
-        <textarea id="confText" spellcheck="false" rows="12" placeholder="app-a-web   web   -      app-a.example.com   app-a-api
-app-a-api   api   3001   -                   -"></textarea>
+
+        <div class="row actions">
+          <button id="btnLoadLocalConf" class="btn">从本地文件加载</button>
+          <button id="btnDownloadConf" class="btn">从服务器下载</button>
+          <button id="btnSaveLocalConf" class="btn">另存为本地</button>
+          <span id="confPathHint" class="hint"></span>
+        </div>
+
+        <textarea id="confText" spellcheck="false" rows="11" placeholder="app-a-web   web   -      app-a.example.com   app-a-api   none
+app-a-api   api   3001   -                   -           mysql"></textarea>
+
         <div class="row actions">
           <button id="btnApplyConf" class="btn primary">上传并应用</button>
-          <button id="btnDownloadConf" class="btn">从服务器下载</button>
-          <span class="hint">应用会执行 /opt/deploy/apply.sh，幂等</span>
+          <span class="hint">执行 /opt/deploy/apply.sh，幂等；已存在的 .env、数据库、nginx 块不会被覆盖</span>
         </div>
       </section>
 
+      <section class="card">
+        <h2>数据库</h2>
+        <div class="row">
+          <button id="btnDbRefresh" class="btn">刷新清单</button>
+          <select id="dbProject" class="grow"></select>
+          <button id="btnDbMigrate" class="btn">执行迁移</button>
+          <button id="btnDbBackup" class="btn">备份</button>
+        </div>
+        <table class="tbl" id="dbTable">
+          <thead>
+            <tr><th>项目</th><th>库名</th><th>状态</th><th>大小</th><th>表</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="hint">
+          api 项目建库时写入各自的 .env（库名/密码都在里面）；备份落在服务器
+          <code>/var/backups/&lt;项目&gt;-时间.sql.gz</code>。conf 里 db 列写
+          <code>none</code> 可跳过建库。
+        </p>
+      </section>
+    </main>
+
+    <main class="panel" id="tab-publish" hidden>
       <section class="card">
         <h2>发布后端</h2>
         <label>仓库目录
@@ -99,7 +141,7 @@ app-a-api   api   3001   -                   -"></textarea>
         <div class="row actions">
           <button id="btnPush" class="btn primary">git push 发布</button>
         </div>
-        <p class="hint">本地推送后，服务器钩子会自动 install → build → restart</p>
+        <p class="hint">本地推送后，服务器钩子会自动 install → build → migrate → restart</p>
       </section>
 
       <section class="card">

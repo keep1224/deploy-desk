@@ -19,13 +19,19 @@ frontend uploads.
 
 ## 功能
 
-| 面板 | 作用 |
-|---|---|
-| 连接配置 | 保存多台服务器；密码/私钥口令用 Windows DPAPI 加密存储，不落明文 |
-| 服务器状态 | 一次采集 Node/pnpm/Nginx/MySQL 版本、内存与 swap、运行中的服务、监听端口、`/opt/apps` 与 `/opt/git` 内容、钩子数量 |
-| 项目配置 | 编辑 `projects.conf`，上传脚本并执行 `apply.sh`，日志实时回显；也可从服务器下载现有配置 |
-| 发布后端 | 在本地仓库执行 `git push <remote> <branch>`，服务器 `post-receive` 钩子负责安装、构建、重启 |
-| 发布前端 | 把本地 `dist/` 通过 SFTP 上传到 `/var/www/<name>`，可选上传前清空 |
+界面分三个菜单：**服务器** / **项目** / **发布**，日志固定在底部。
+
+| 菜单 | 面板 | 作用 |
+|---|---|---|
+| 服务器 | 连接配置 | 保存多台服务器；密码/私钥口令用 Windows DPAPI 加密存储，不落明文 |
+| 服务器 | 服务器状态 | 一次采集 Node/pnpm/Nginx/MySQL 版本、内存与 swap、运行中的服务、监听端口、`/opt/apps` 与 `/opt/git` 内容、钩子数量 |
+| 项目 | 项目配置 | `projects.conf` 可从本地文件或服务器回显（默认读脚本目录里的模板），改完上传并执行 `apply.sh` |
+| 项目 | 数据库 | 列出各项目的库名/是否存在/大小/表数；对选中项目执行 `prisma migrate deploy` 或备份到 `/var/backups` |
+| 发布 | 发布后端 | 在本地仓库执行 `git push <remote> <branch>`，服务器 `post-receive` 钩子负责安装、构建、迁移、重启 |
+| 发布 | 发布前端 | 把本地 `dist/` 通过 SFTP 上传到 `/var/www/<name>`，可选上传前清空 |
+
+`projects.conf` 的 `db` 列决定是否建库：`mysql`（默认，库名 = 项目名把 `-` 换成 `_`）、`none`（不建库，纯接口项目）、或直接写库名。库名与密码写进 `/opt/apps/<name>/.env` 的 `DATABASE_URL`。
+
 
 ## 服务器侧约定
 
@@ -35,6 +41,8 @@ frontend uploads.
 /opt/apps/<name>          后端应用目录
 /opt/git/<name>.git       bare 仓库，hooks/post-receive 触发构建
 /opt/deploy/apply.sh      项目清单的收敛脚本
+/opt/deploy/add-project.sh 单个项目初始化
+/opt/deploy/db.sh         数据库清单 / 迁移 / 备份
 /opt/deploy/projects.conf 项目清单（面板里编辑）
 /var/www/<name>           前端静态文件
 ```

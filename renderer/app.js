@@ -150,9 +150,16 @@ $('#profileSelect').addEventListener('change', (e) => {
   fillForm(state.profiles.find((p) => p.id === state.activeId));
 });
 
-$('#scriptsDir').addEventListener('change', async (e) => {
-  await window.api.settings.save({ scriptsDir: e.target.value.trim() });
-});
+// ── tabs ────────────────────────────────────────────────────
+const TABS = $$('.tab');
+const PANELS = $$('.panel');
+
+function showTab(name) {
+  for (const t of TABS) t.classList.toggle('active', t.dataset.tab === name);
+  for (const p of PANELS) p.hidden = p.id !== `tab-${name}`;
+}
+
+for (const t of TABS) t.addEventListener('click', () => showTab(t.dataset.tab));
 
 // ── server ──────────────────────────────────────────────────
 $('#btnTest').addEventListener('click', async (e) => {
@@ -197,10 +204,36 @@ $('#btnProbe').addEventListener('click', async (e) => {
 });
 
 // ── projects.conf ───────────────────────────────────────────
+function setConfPath(p) {
+  $('#confPathHint').textContent = p ? `当前来源：${p}` : '';
+}
+
 async function loadConf() {
   const r = await window.api.conf.load();
   $('#confText').value = r.text || '';
+  setConfPath(r.path);
 }
+
+$('#btnLoadLocalConf').addEventListener('click', async () => {
+  const r = await window.api.conf.pickFile();
+  if (!r.ok) {
+    if (!r.canceled) appendLog('err', `${r.error || '读取失败'}\n`);
+    return;
+  }
+  $('#confText').value = r.text;
+  setConfPath(r.path);
+  appendLog('info', `已从本地加载 ${r.path}\n`);
+});
+
+$('#btnSaveLocalConf').addEventListener('click', async () => {
+  const r = await window.api.conf.saveAs($('#confText').value);
+  if (!r.ok) {
+    if (!r.canceled) appendLog('err', `${r.error || '保存失败'}\n`);
+    return;
+  }
+  setConfPath(r.path);
+  appendLog('ok', `已保存到 ${r.path}\n`);
+});
 
 $('#btnApplyConf').addEventListener('click', async (e) => {
   if (!state.activeId) {
@@ -230,9 +263,80 @@ $('#btnDownloadConf').addEventListener('click', async (e) => {
   setBusy(btn, false);
   if (r.ok) {
     $('#confText').value = r.text;
-    appendLog('ok', '已下载服务器上的 projects.conf\n');
+    setConfPath('/opt/deploy/projects.conf（服务器）');
+    appendLog('ok', '已从服务器下载 projects.conf\n');
   } else appendLog('err', r.error + '\n');
 });
+
+// ── database ────────────────────────────────────────────────
+function renderDbRows(rows) {
+  const tbody = $('#dbTable tbody');
+  const sel = $('#dbProject');
+  const prev = sel.value;
+  tbody.textContent = '';
+  sel.textContent = '';
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    const cells = [
+      [row.name, ''],
+      [row.db || '—', 'muted'],
+      [row.exists ? '已建库' : '缺失', row.exists ? 'present' : 'missing'],
+      [row.size || '-', 'muted'],
+      [row.tables || '-', 'muted'],
+    ];
+    for (const [text, cls] of cells) {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (cls) td.className = cls;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+    const opt = document.createElement('option');
+    opt.value = row.name;
+    opt.textContent = row.db ? `${row.name} (${row.db})` : `${row.name} (无数据库)`;
+    sel.appendChild(opt);
+  }
+  if (prev) sel.value = prev;
+}
+
+$('#btnDbRefresh').addEventListener('click', async (e) => {
+  if (!state.activeId) {
+    appendLog('err', '先选择一个连接\n');
+    return;
+  }
+  const btn = e.currentTarget;
+  setBusy(btn, true, '刷新中…');
+  const r = await window.api.db.list(state.activeId);
+  setBusy(btn, false);
+  if (!r.ok) {
+    appendLog('err', `${r.error}\n`);
+    return;
+  }
+  renderDbRows(r.rows);
+  appendLog('ok', `数据库清单已刷新（${r.rows.length} 个项目）\n`);
+});
+
+async function runDbAction(action, label) {
+  if (!state.activeId) {
+    appendLog('err', '先选择一个连接\n');
+    return null;
+  }
+  const app = $('#dbProject').value;
+  if (!app) {
+    appendLog('err', '先刷新清单并选一个项目\n');
+    return null;
+  }
+  const btn = $(action === 'migrate' ? '#btnDbMigrate' : '#btnDbBackup');
+  setBusy(btn, true, `${label}中…`);
+  const r = await window.api.db.run({ id: state.activeId, app, action });
+  setBusy(btn, false);
+  if (!r.ok) appendLog('err', `${r.error || `退出码 ${r.code}`}\n`);
+  else appendLog('ok', `${label}完成\n`);
+  return r;
+}
+
+$('#btnDbMigrate').addEventListener('click', () => runDbAction('migrate', '迁移'));
+$('#btnDbBackup').addEventListener('click', () => runDbAction('dump', '备份'));
 
 $('#btnPickScripts').addEventListener('click', async () => {
   const dir = await window.api.pickDir();
