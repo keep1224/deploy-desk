@@ -38,7 +38,7 @@ body { display: flex; flex-direction: column; }
 .brand { font-weight: 600; letter-spacing: .3px; }
 
 .bar-group { display: flex; align-items: center; gap: 8px; }
-.bar-group label { color: var(--muted); }
+.bar-group label { color: var(--muted); white-space: nowrap; }
 
 .dot {
   width: 9px; height: 9px; border-radius: 50%;
@@ -90,7 +90,7 @@ body { display: flex; flex-direction: column; }
 .form { display: flex; flex-direction: column; gap: 8px; }
 
 label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
-label.check { flex-direction: row; align-items: center; gap: 8px; }
+label.check { flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
 label.narrow { width: 96px; }
 
 .row { display: flex; gap: 8px; align-items: flex-end; }
@@ -106,6 +106,8 @@ input, select, textarea {
   font: inherit;
   width: 100%;
 }
+
+input[type="checkbox"] { width: auto; margin: 0; }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
