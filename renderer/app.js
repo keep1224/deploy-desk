@@ -276,7 +276,8 @@ function dbCellOf(row) {
   if (row.db === 'none') return makeCell('未启用', 'muted');
   if (!proj.loaded) return makeCell(row.db === 'mysql' ? '待创建' : row.db, 'muted');
   const s = proj.server.get(row.name);
-  if (!s || !s.db || s.db === '-') return makeCell('未启用', 'muted');
+  if (!s) return makeCell(row.db === 'mysql' ? '待创建' : row.db, 'muted');
+  if (!s.db || s.db === '-') return makeCell('未启用', 'muted');
   if (!s.exists) return makeCell(`${s.db} · 缺失`, 'missing mono');
   return makeCell(`${s.db} · ${s.tables} 表 · ${s.size}`, 'mono');
 }
