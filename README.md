@@ -1,21 +1,34 @@
 # Deploy Desk
 
-A small Windows desktop panel for a single Linux server that runs one or two Node
+A small desktop panel for a single Linux server that runs one or two Node
 backends plus static frontends. It wraps the repetitive parts of a bare-metal,
 no-Docker setup: SSH health checks, per-project provisioning, `git push` deploys and
 frontend uploads.
 
 > 面向"一台 2G 小服务器 + 若干 Vue/Node 项目"的桌面运维面板。不用 Docker，不用在服务器上
-> 额外跑面板服务，所有操作从本地通过 SSH 发起。
+> 额外跑面板服务，所有操作从本地通过 SSH 发起。支持 Windows / macOS / Linux。
 
 ## 下载
 
-到 [Releases](../../releases) 页面下载：
+到 [Releases](../../releases) 页面下载对应平台的包：
 
-- `Deploy Desk-x.y.z-setup.exe` — 安装版（可选安装目录）
-- `Deploy Desk-x.y.z-portable.exe` — 免安装，双击即用
+| 平台 | 文件 | 说明 |
+|---|---|---|
+| Windows | `Deploy Desk-x.y.z-setup.exe` | 安装版（可选安装目录） |
+| Windows | `Deploy Desk-x.y.z-portable.exe` | 免安装，双击即用 |
+| macOS | `Deploy Desk-x.y.z-arm64.dmg` | Apple Silicon（M 系列） |
+| macOS | `Deploy Desk-x.y.z-x64.dmg` | Intel 芯片 |
+| Linux | `Deploy Desk-x.y.z-x86_64.AppImage` | 免安装，`chmod +x` 后直接运行 |
+| Linux | `Deploy Desk-x.y.z-amd64.deb` | Debian / Ubuntu 安装包 |
 
-未做代码签名，Windows SmartScreen 可能提示"未知发布者"，选"更多信息 → 仍要运行"。
+没有代码签名：
+
+- Windows SmartScreen 可能提示"未知发布者"，选"更多信息 → 仍要运行"。
+- macOS 首次打开会拦下（应用是 ad-hoc 签名）。执行一次
+  `xattr -dr com.apple.quarantine "/Applications/Deploy Desk.app"`，
+  或右键 → 打开。Apple Silicon 版不要用 Intel 版运行。
+- Linux AppImage 需要 `chmod +x`，部分发行版还要装 `libfuse2`。
+
 
 ## 功能
 
@@ -53,9 +66,13 @@ frontend uploads.
 
 ```bash
 npm install
-npm start          # 需要 Node 20+
-npm run dist       # 本地构建 Windows 安装包（输出到 release/）
+npm start            # 需要 Node 20+
+npm run dist:win     # Windows 安装包 / 免安装版
+npm run dist:mac     # dmg（x64 + arm64，只能在 macOS 上跑）
+npm run dist:linux   # AppImage + deb（只能在 Linux 上跑）
 ```
+
+产物都在 `release/`。CI 用 GitHub Actions 在三个系统上矩阵构建，推 `main` 即发版。
 
 ## 安全
 

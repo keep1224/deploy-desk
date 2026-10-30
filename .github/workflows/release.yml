@@ -10,7 +10,19 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            flag: --win
+          - os: macos-latest
+            flag: --mac
+          - os: ubuntu-latest
+            flag: --linux
+    runs-on: ${{ matrix.os }}
+    outputs:
+      version: ${{ steps.pkg.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,20 +38,40 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Build Windows installers
-        run: npx electron-builder --win --publish never
+      - name: Build
+        run: npx electron-builder ${{ matrix.flag }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/*.dmg
+            release/*.AppImage
+            release/*.deb
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download builds
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.pkg.outputs.version }}
-          name: v${{ steps.pkg.outputs.version }}
+          tag_name: v${{ needs.build.outputs.version }}
+          name: v${{ needs.build.outputs.version }}
           generate_release_notes: true
           make_latest: true
-          files: |
-            release/*.exe
-            release/*.blockmap
+          files: artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
