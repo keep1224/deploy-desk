@@ -289,7 +289,7 @@
       <figcaption><b>项目页</b>：左边切换页面，中间是当前任务，右边是执行过程日志</figcaption>
     </figure>
     <ul>
-      <li><strong>左侧菜单</strong>：只有 <strong>项目 / 配置 / 发布</strong> 三页，按任务划分。</li>
+      <li><strong>左侧菜单</strong>：按使用顺序排列的 <strong>配置 / 项目 / 发布</strong> 三页。</li>
       <li><strong>左下角</strong>：切换当前服务器连接；「管理连接」跳到配置页；<strong>?</strong> 打开本说明；齿轮打开设置。</li>
       <li><strong>右侧「执行过程」</strong>：所有命令、上传进度、错误都实时打在这里。出问题先看这里，再点「清空」重新来。</li>
     </ul>
@@ -302,7 +302,7 @@
     <div class="step">
       <span class="num">1</span>
       <h3>配置连接</h3>
-      <p>打开 <strong>配置</strong> 页，在右侧「连接配置」里填：</p>
+      <p>打开 <strong>配置</strong> 页，在「连接配置」卡片里填：</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th style="width:110px">字段</th><th>怎么填</th></tr></thead>
@@ -317,7 +317,7 @@
       </div>
       <p>点 <strong>保存</strong>，再点「服务器状态」卡片右上角的 <strong>测试连接</strong>。左下角的小圆点变绿，说明连通了。</p>
       <figure>
-        <img class="shot" src="img/02-config.png" alt="配置页：左侧服务器状态，右侧连接配置表单" />
+        <img class="shot" src="img/02-config.png" alt="配置页：连接配置表单和服务器状态" />
         <figcaption><b>配置页</b>：先保存连接，再测试；「采集状态」只读，不会改服务器</figcaption>
       </figure>
       <div class="callout warn">
@@ -337,13 +337,12 @@
       <h3>准备项目清单</h3>
       <p>回到 <strong>项目</strong> 页，点开「原始配置 <code>projects.conf</code>」：</p>
       <ul>
-        <li><strong>本地脚本目录</strong>：选到 <code>scripts/deploy</code>，里面必须有 <code>apply.sh</code>、<code>add-project.sh</code>、<code>post-receive</code>、<code>db.sh</code> 四个文件。</li>
-        <li>下面的文本框就是项目清单，从服务器下载、从本地加载、或直接改都行。</li>
+        <li>文本框就是项目清单，从服务器下载、从本地加载、或直接改都行。</li>
         <li>也可以在项目表底部点「+ 新增项目」，会追加一行模板。</li>
       </ul>
       <figure>
-        <img class="shot" src="img/06-rawconf.png" alt="项目页展开原始配置：脚本目录、操作按钮和 projects.conf 文本" />
-        <figcaption><b>原始配置</b>：脚本目录 + <code>projects.conf</code>；改完点右上角「应用更改」</figcaption>
+        <img class="shot" src="img/06-rawconf.png" alt="项目页展开原始配置：操作按钮和 projects.conf 文本" />
+        <figcaption><b>原始配置</b>：<code>projects.conf</code> 文本；改完点右上角「应用更改」</figcaption>
       </figure>
     </div>
 
@@ -352,7 +351,7 @@
       <h3>应用更改（第一次会初始化服务器）</h3>
       <p>点右上角的 <strong>应用更改</strong>。它会：</p>
       <ol>
-        <li>把四个脚本和 <code>projects.conf</code> 上传到 <code>/opt/deploy</code>；</li>
+        <li>把内置的四个部署脚本和 <code>projects.conf</code> 上传到 <code>/opt/deploy</code>；</li>
         <li>在服务器执行 <code>apply.sh</code>，按清单逐个项目初始化。</li>
       </ol>
       <p>每个后端项目会创建：系统用户、<code>/opt/apps/&lt;name&gt;</code>、<code>/opt/git/&lt;name&gt;.git</code>（带 push 钩子）、systemd 服务 <code>nest-&lt;name&gt;</code>、<code>.env</code>、MySQL 库和用户；前端项目会创建 <code>/var/www/&lt;name&gt;</code> 和 nginx 站点。整个过程<strong>幂等</strong>：已经存在的 <code>.env</code>、数据库不会被覆盖。</p>
@@ -465,8 +464,8 @@
     </details>
 
     <details>
-      <summary>应用更改报「缺少脚本」</summary>
-      <p>「本地脚本目录」必须指向包含 <code>apply.sh</code>、<code>add-project.sh</code>、<code>post-receive</code>、<code>db.sh</code> 的目录，通常是仓库里的 <code>scripts/deploy</code>。选错目录或缺文件都会在上传前被拦下。</p>
+      <summary>应用更改报「内置部署脚本缺失」</summary>
+      <p>说明这个安装包不完整，<code>resources/server</code> 下应该有 <code>apply.sh</code>、<code>add-project.sh</code>、<code>post-receive</code>、<code>db.sh</code> 四个文件。重新下载安装包即可；自行打包时确认仓库里有 <code>server/</code> 目录。</p>
     </details>
 
     <details>

@@ -11,7 +11,15 @@
       <div class="brand"><span class="logo">D</span>Deploy Desk</div>
 
       <nav class="nav">
-        <button class="nav-item active" data-tab="project">
+        <button class="nav-item active" data-tab="config">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 17h16" />
+            <circle cx="9" cy="7" r="2.2" />
+            <circle cx="15" cy="17" r="2.2" />
+          </svg>
+          <span>配置</span>
+        </button>
+        <button class="nav-item" data-tab="project">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="7" rx="1.5" />
             <rect x="14" y="3" width="7" height="7" rx="1.5" />
@@ -19,14 +27,6 @@
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
           </svg>
           <span>项目</span>
-        </button>
-        <button class="nav-item" data-tab="config">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-            <path d="M4 7h16M4 17h16" />
-            <circle cx="9" cy="7" r="2.2" />
-            <circle cx="15" cy="17" r="2.2" />
-          </svg>
-          <span>配置</span>
         </button>
         <button class="nav-item" data-tab="publish">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -77,6 +77,13 @@
           </div>
         </header>
 
+        <ol class="steps" id="projSteps" aria-label="使用步骤">
+          <li data-step="connect"><span class="sn">1</span><span class="sl">连接服务器</span></li>
+          <li data-step="conf"><span class="sn">2</span><span class="sl">准备项目清单</span></li>
+          <li data-step="apply"><span class="sn">3</span><span class="sl">应用到服务器</span></li>
+          <li data-step="publish"><span class="sn">4</span><span class="sl">发布代码</span></li>
+        </ol>
+
         <section class="card table-card">
           <div class="table-scroll">
             <table class="tbl proj-tbl" id="projTable">
@@ -106,13 +113,6 @@
           </button>
 
           <div id="confBox" hidden>
-            <div class="row">
-              <label class="grow">本地脚本目录（scripts/deploy）
-                <input id="scriptsDir" placeholder="例如 D:\code\my-api\scripts\deploy" />
-              </label>
-              <button id="btnPickScripts" class="btn narrow-btn">选择</button>
-            </div>
-
             <div class="row actions">
               <button id="btnLoadLocalConf" class="btn">从本地文件加载</button>
               <button id="btnDownloadConf" class="btn">从服务器下载</button>
@@ -153,27 +153,6 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
 
         <div class="split">
           <section class="card">
-            <div class="card-head">
-              <h2>服务器状态</h2>
-              <div class="card-tools">
-                <button id="btnTest" class="btn">测试连接</button>
-                <button id="btnProbe" class="btn">采集状态</button>
-              </div>
-            </div>
-            <dl id="status" class="kv">
-              <dt>Node</dt><dd id="st-node">—</dd>
-              <dt>pnpm</dt><dd id="st-pnpm">—</dd>
-              <dt>Nginx</dt><dd id="st-nginx">—</dd>
-              <dt>MySQL</dt><dd id="st-mysql">—</dd>
-              <dt>内存 / Swap</dt><dd id="st-mem">—</dd>
-              <dt>服务</dt><dd id="st-svc">—</dd>
-              <dt>监听端口</dt><dd id="st-ports">—</dd>
-              <dt>项目目录</dt><dd id="st-apps">—</dd>
-              <dt>bare 仓库</dt><dd id="st-repos">—</dd>
-            </dl>
-          </section>
-
-          <section class="card">
             <h2>连接配置</h2>
             <form id="profileForm" class="form">
               <label>名称<input name="name" placeholder="生产服务器" /></label>
@@ -210,6 +189,27 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
               <p id="secretHint" class="hint"></p>
             </form>
           </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h2>服务器状态</h2>
+              <div class="card-tools">
+                <button id="btnTest" class="btn">测试连接</button>
+                <button id="btnProbe" class="btn">采集状态</button>
+              </div>
+            </div>
+            <dl id="status" class="kv">
+              <dt>Node</dt><dd id="st-node">—</dd>
+              <dt>pnpm</dt><dd id="st-pnpm">—</dd>
+              <dt>Nginx</dt><dd id="st-nginx">—</dd>
+              <dt>MySQL</dt><dd id="st-mysql">—</dd>
+              <dt>内存 / Swap</dt><dd id="st-mem">—</dd>
+              <dt>服务</dt><dd id="st-svc">—</dd>
+              <dt>监听端口</dt><dd id="st-ports">—</dd>
+              <dt>项目目录</dt><dd id="st-apps">—</dd>
+              <dt>bare 仓库</dt><dd id="st-repos">—</dd>
+            </dl>
+          </section>
         </div>
       </section>
 
@@ -237,7 +237,7 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
             <div class="row actions">
               <button id="btnPush" class="btn primary">git push 发布</button>
             </div>
-            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart</p>
+            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart。面板只确认 git 推送成功，构建结果看日志里的 remote: 输出。</p>
           </section>
 
           <section class="card">

@@ -34,7 +34,7 @@ frontend uploads.
 
 ## 功能
 
-左侧菜单是 **项目** / **配置** / **发布**，右侧常驻「执行过程」日志，连接切换和「设置」（主题、版本与更新）固定在左下角。
+左侧菜单按使用顺序是 **配置** / **项目** / **发布**，右侧常驻「执行过程」日志，连接切换和「设置」（主题、版本与更新）固定在左下角。项目页顶部的四步条会标出当前进行到哪一步。
 
 | 菜单 | 面板 | 作用 |
 |---|---|---|
@@ -42,7 +42,7 @@ frontend uploads.
 | 配置 | 服务器状态 | 一次采集 Node/pnpm/Nginx/MySQL 版本、内存与 swap、运行中的服务、监听端口、`/opt/apps` 与 `/opt/git` 内容、钩子数量 |
 | 项目 | 项目表 | 一行一个项目：类型、入口、数据库、状态、操作都在同一行；配置写错的行直接标红并说明原因；配了域名的项目可直接「打开」浏览器 |
 | 项目 | 数据库 / 状态 | 刷新服务器后显示每个项目是否已部署、库是否存在、表数与大小；后端行可执行迁移、备份，或把本地 `.sql` / `.sql.gz` 导入服务器库；纯前端行显示「已发布 / 未发布」，点「发前端」直接用发布页的 dist 目录覆盖到 `/var/www/<name>` |
-| 项目 | 原始配置 | `projects.conf` 折叠在高级区，可从本地文件或服务器回显，改完点「应用更改」执行 `apply.sh` |
+| 项目 | 原始配置 | `projects.conf` 折叠在高级区；进入项目页或切换连接时会用服务器版本同步本地副本，改完点「应用更改」；若服务器上的配置在此期间被改过，会先弹确认 |
 | 项目 | nginx 配置 | 项目页底部显示 `nginx -t` 状态，点「查看」在弹窗里只读展示服务器上由 `apply.sh` 生成的 `/etc/nginx/conf.d/projects.conf` |
 | 发布 | 发布后端 | 在本地仓库执行 `git push <remote> <branch>`，服务器 `post-receive` 钩子负责安装、构建、迁移、重启 |
 | 发布 | 发布前端 | 把本地 `dist/` 通过 SFTP 上传到 `/var/www/<name>`，可选上传前清空 |
@@ -78,15 +78,24 @@ Releases 里上传的 `latest.yml` / `latest-linux.yml`）。Windows 免安装�
 
 钩子、systemd unit、Nginx 配置都不由本程序管理——它只是这些命令的图形入口。
 
+`/opt/deploy` 下的四个脚本（`apply.sh`、`add-project.sh`、`db.sh`、`post-receive`）
+随应用分发（仓库 `server/`，打包进 `resources/server`）：每次「应用更改」会先上传这
+四个文件再执行 `apply.sh`，不需要单独准备脚本目录。
+
 ## 本地开发
 
 ```bash
 npm install
-npm start            # 需要 Node 20+
+npm start            # 需要 Node 20+，读取仓库 server/ 下的部署脚本
 npm run dist:win     # Windows 安装包 / 免安装版
 npm run dist:mac     # dmg（x64 + arm64，只能在 macOS 上跑）
 npm run dist:linux   # AppImage + deb（只能在 Linux 上跑）
 ```
+
+Windows 上也可以直接双击 `start.cmd`：它会清掉 `ELECTRON_RUN_AS_NODE`、带上
+`--no-sandbox --disable-gpu` 并用项目内的 `.userdata` 目录启动。如果终端里
+`npm start` 闪退（Chromium 沙箱在受限环境初始化失败），用
+`npm start -- --no-sandbox` 即可。
 
 产物都在 `release/`。CI 用 GitHub Actions 在三个系统上矩阵构建，推 `main` 即发版。
 

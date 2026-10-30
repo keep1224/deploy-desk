@@ -65,7 +65,6 @@ function dot(stateName) {
 
 // ── persisted settings ──────────────────────────────────────
 const SETTING_FIELDS = {
-  scriptsDir: '#scriptsDir',
   repoDir: '#repoDir',
   distDir: '#distDir',
   gitRemote: '#gitRemote',
@@ -214,13 +213,21 @@ $('#btnNewProfile').addEventListener('click', () => {
   syncAuthFields();
 });
 
-$('#profileSelect').addEventListener('change', (e) => {
+$('#profileSelect').addEventListener('change', async (e) => {
+  if (confDirty() && !confirm('当前配置有未应用的修改，切换连接会丢弃这些修改。继续？')) {
+    e.target.value = state.activeId;
+    return;
+  }
   state.activeId = e.target.value;
   fillForm(state.profiles.find((p) => p.id === state.activeId));
   proj.server = new Map();
+  proj.ports = new Set();
   proj.loaded = false;
+  proj.published = false;
   resetNginx();
-  renderProjects();
+  await loadConf(state.activeId);
+  await syncConfFromServer();
+  await refreshServerState({ quiet: true });
 });
 
 // ── tabs ────────────────────────────────────────────────────
@@ -230,11 +237,29 @@ const PANELS = $$('.panel');
 function showTab(name) {
   for (const t of TABS) t.classList.toggle('active', t.dataset.tab === name);
   for (const p of PANELS) p.hidden = p.id !== `tab-${name}`;
-  if (name === 'project' && !proj.loaded) refreshServerState({ quiet: true });
+  if (name === 'project' && !proj.loaded) {
+    refreshServerState({ quiet: true });
+    syncConfFromServer();
+  }
 }
 
 for (const t of TABS) t.addEventListener('click', () => showTab(t.dataset.tab));
 $('#btnManageConn').addEventListener('click', () => showTab('config'));
+
+$('#projSteps').addEventListener('click', (e) => {
+  const li = e.target.closest('li[data-step]');
+  if (!li) return;
+  const key = li.dataset.step;
+  if (key === 'connect') showTab('config');
+  else if (key === 'conf') {
+    openConfBox();
+    $('#confBox').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    $('#confText').focus();
+  } else if (key === 'apply') {
+    $('#btnApplyConf').focus();
+    $('#btnApplyConf').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else if (key === 'publish') showTab('publish');
+});
 
 // ── server ──────────────────────────────────────────────────
 $('#btnTest').addEventListener('click', async (e) => {
@@ -280,7 +305,7 @@ $('#btnProbe').addEventListener('click', async (e) => {
 });
 
 // ── projects ────────────────────────────────────────────────
-const proj = { rows: [], server: new Map(), loaded: false, baseText: '', nginxLoaded: false };
+const proj = { rows: [], server: new Map(), ports: new Set(), loaded: false, baseText: '', nginxLoaded: false, published: false };
 const NAME_RE = /^[a-z][a-z0-9-]{2,30}$/;
 const DBNAME_RE = /^[a-z][a-z0-9_]{2,30}$/;
 
@@ -421,9 +446,15 @@ function statusCellOf(row) {
     st.className = 'st';
     st.textContent = '未知';
   } else if (proj.server.has(row.name)) {
-    st.className = 'st ok';
-    st.textContent = row.type === 'web' ? '已发布' : '已部署';
-    if (row.type === 'web') td.title = `/var/www/${row.name}`;
+    if (row.type === 'api' && row.port !== '-' && proj.ports.size && !proj.ports.has(row.port)) {
+      st.className = 'st warn';
+      st.textContent = '已部署·未监听';
+      td.title = `端口 ${row.port} 没有在监听，服务可能没起来`;
+    } else {
+      st.className = 'st ok';
+      st.textContent = row.type === 'web' ? '已发布' : '已部署';
+      if (row.type === 'web') td.title = `/var/www/${row.name}`;
+    }
   } else {
     st.className = 'st warn';
     st.textContent = row.type === 'web' ? '未发布' : '待初始化';
@@ -493,8 +524,24 @@ function renderProjects() {
 
   if (!proj.rows.length) {
     const tr = document.createElement('tr');
-    const td = makeCell('还没有项目。点下面「+ 新增项目」，或展开原始配置从本地 / 服务器加载。', 'proj-empty');
+    const td = document.createElement('td');
     td.colSpan = 5;
+    td.className = 'proj-empty';
+    td.textContent = proj.loaded ? '服务器上还没有项目清单。' : '还没有项目清单，先从服务器下载或手动新建。';
+
+    const actions = document.createElement('div');
+    actions.className = 'empty-actions';
+    const download = document.createElement('button');
+    download.className = 'btn';
+    download.textContent = '从服务器下载配置';
+    download.dataset.emptyDownload = '1';
+    const add = document.createElement('button');
+    add.className = 'btn primary';
+    add.textContent = '+ 新建项目';
+    add.dataset.emptyAdd = '1';
+    actions.append(download, add);
+    td.appendChild(actions);
+
     tr.appendChild(td);
     tbody.appendChild(tr);
   } else {
@@ -527,6 +574,28 @@ function renderProjects() {
   const summary = $('#projSummary');
   summary.textContent = parts.join(' · ');
   summary.classList.toggle('bad', bad > 0);
+
+  $('#btnApplyConf').disabled = !proj.rows.length;
+  renderSteps();
+}
+
+const STEP_KEYS = ['connect', 'conf', 'apply', 'publish'];
+
+function renderSteps() {
+  const done = {
+    connect: proj.loaded,
+    conf: proj.rows.length > 0,
+    apply: proj.rows.length > 0 && proj.loaded && proj.rows.every((r) => proj.server.has(r.name)),
+    publish: proj.published,
+  };
+  const current = STEP_KEYS.find((k) => !done[k]) || '';
+
+  for (const li of $$('#projSteps li')) {
+    const key = li.dataset.step;
+    li.classList.toggle('done', !!done[key]);
+    li.classList.toggle('current', key === current);
+    li.querySelector('.sn').textContent = done[key] ? '✓' : String(STEP_KEYS.indexOf(key) + 1);
+  }
 }
 
 async function refreshServerState({ quiet = false } = {}) {
@@ -542,6 +611,7 @@ async function refreshServerState({ quiet = false } = {}) {
     return false;
   }
   proj.server = new Map(r.rows.map((row) => [row.name, row]));
+  proj.ports = new Set(r.ports || []);
   proj.loaded = true;
   renderProjects();
   return true;
@@ -590,6 +660,8 @@ async function publishWeb(name, btn) {
   const r = await window.api.web.upload({ id: state.activeId, localDir, remoteDir, clean });
   setBusy(btn, false);
   if (r.ok) {
+    proj.published = true;
+    renderSteps();
     appendLog('ok', `${name} 前端已发布（${r.files} 个文件）→ ${remoteDir}\n`);
     await refreshServerState({ quiet: true });
   } else {
@@ -602,15 +674,39 @@ function setConfPath(p) {
   $('#confPathHint').textContent = p ? `来源：${p}` : '';
 }
 
-async function loadConf() {
-  const r = await window.api.conf.load();
+async function loadConf(id) {
+  const r = await window.api.conf.load(id);
   $('#confText').value = r.text || '';
   proj.baseText = $('#confText').value;
   setConfPath(r.path);
   syncProjects();
 }
 
+function confDirty() {
+  return $('#confText').value !== proj.baseText;
+}
+
+async function syncConfFromServer() {
+  if (!state.activeId || confDirty()) return false;
+  const r = await window.api.conf.remote(state.activeId);
+  if (!r.ok) return false;
+  if (r.text === $('#confText').value) {
+    setConfPath('/opt/deploy/projects.conf（已同步）');
+    return true;
+  }
+  $('#confText').value = r.text;
+  proj.baseText = r.text;
+  setConfPath(`/opt/deploy/projects.conf（已同步 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}）`);
+  syncProjects();
+  return true;
+}
+
 $('#confText').addEventListener('input', syncProjects);
+
+function openConfBox() {
+  $('#confBox').hidden = false;
+  $('#btnToggleConf').classList.add('open');
+}
 
 $('#btnToggleConf').addEventListener('click', () => {
   const box = $('#confBox');
@@ -627,17 +723,17 @@ function nextProjectName() {
   return 'new-api';
 }
 
-$('#btnAddProject').addEventListener('click', () => {
-  const box = $('#confBox');
-  box.hidden = false;
-  $('#btnToggleConf').classList.add('open');
+function addProjectRow() {
+  openConfBox();
   const ta = $('#confText');
   const sep = ta.value && !ta.value.endsWith('\n') ? '\n' : '';
   ta.value += `${sep}${nextProjectName().padEnd(11)} api   -      -                   -           mysql\n`;
   syncProjects();
   ta.focus();
   ta.scrollTop = ta.scrollHeight;
-});
+}
+
+$('#btnAddProject').addEventListener('click', addProjectRow);
 
 $('#btnLoadLocalConf').addEventListener('click', async () => {
   const r = await window.api.conf.pickFile();
@@ -670,7 +766,6 @@ $('#btnApplyConf').addEventListener('click', async (e) => {
     return;
   }
   const text = $('#confText').value;
-  const scriptsDir = $('#scriptsDir').value.trim();
   if (!text.trim()) {
     appendLog('err', 'projects.conf 是空的\n');
     return;
@@ -683,12 +778,23 @@ $('#btnApplyConf').addEventListener('click', async (e) => {
 
   const btn = e.currentTarget;
   setBusy(btn, true, '应用中…');
-  await window.api.conf.save(text);
-  const r = await window.api.conf.apply({ id: state.activeId, text, scriptsDir });
+  const remote = await window.api.conf.remote(state.activeId);
+  if (remote.ok && remote.text !== proj.baseText) {
+    const overwrite = confirm(
+      '服务器上的 projects.conf 和你加载时不一致。\n继续会用文本框内容覆盖服务器上的版本，确定吗？',
+    );
+    if (!overwrite) {
+      setBusy(btn, false);
+      return;
+    }
+  }
+  await window.api.conf.save({ id: state.activeId, text });
+  const r = await window.api.conf.apply({ id: state.activeId, text });
   setBusy(btn, false);
   if (r.ok) {
     proj.baseText = text;
     syncProjects();
+    setConfPath('/opt/deploy/projects.conf（已应用）');
     appendLog('ok', '\napply.sh 执行成功\n');
     proj.nginxLoaded = false;
     if (!$('#nginxModal').hidden) loadNginx();
@@ -702,9 +808,11 @@ $('#btnApplyConf').addEventListener('click', async (e) => {
   }
 });
 
-$('#btnDownloadConf').addEventListener('click', async (e) => {
-  if (!state.activeId) return;
-  const btn = e.currentTarget;
+async function downloadConf(btn) {
+  if (!state.activeId) {
+    appendLog('err', '先在「配置」页选择一个连接\n');
+    return;
+  }
   setBusy(btn, true, '下载中…');
   const r = await window.api.conf.download(state.activeId);
   setBusy(btn, false);
@@ -715,7 +823,9 @@ $('#btnDownloadConf').addEventListener('click', async (e) => {
     syncProjects();
     appendLog('ok', '已从服务器下载 projects.conf\n');
   } else appendLog('err', r.error + '\n');
-});
+}
+
+$('#btnDownloadConf').addEventListener('click', (e) => downloadConf(e.currentTarget));
 
 // ── server nginx config ─────────────────────────────────────
 function resetNginx() {
@@ -837,6 +947,15 @@ $('#btnProjRefresh').addEventListener('click', async (e) => {
 });
 
 $('#projTable').addEventListener('click', async (e) => {
+  const dl = e.target.closest('button[data-empty-download]');
+  if (dl) {
+    await downloadConf(dl);
+    return;
+  }
+  if (e.target.closest('button[data-empty-add]')) {
+    addProjectRow();
+    return;
+  }
   const open = e.target.closest('button[data-open]');
   if (open) {
     const r = await window.api.openExternal(open.dataset.open);
@@ -851,13 +970,6 @@ $('#projTable').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-action]');
   if (!btn || btn.disabled) return;
   await runDbAction(btn.dataset.action, btn.dataset.app, btn);
-});
-
-$('#btnPickScripts').addEventListener('click', async () => {
-  const dir = await window.api.pickDir();
-  if (!dir) return;
-  $('#scriptsDir').value = dir;
-  persistSettings({ scriptsDir: dir });
 });
 
 // ── publish ─────────────────────────────────────────────────
@@ -889,8 +1001,11 @@ $('#btnPush').addEventListener('click', async (e) => {
     branch: $('#gitBranch').value.trim() || 'master',
   });
   setBusy(btn, false);
-  if (r.ok) appendLog('ok', '推送完成，服务器钩子已接管构建\n');
-  else appendLog('err', `推送失败${r.code ? `（退出码 ${r.code}）` : ''}\n`);
+  if (r.ok) {
+    proj.published = true;
+    renderSteps();
+    appendLog('ok', '推送完成（git 退出码 0）。钩子构建失败不会让 push 失败，请核对上方 remote: 输出。\n');
+  } else appendLog('err', `推送失败${r.code ? `（退出码 ${r.code}）` : ''}\n`);
 });
 
 $('#btnUpload').addEventListener('click', async (e) => {
@@ -913,8 +1028,11 @@ $('#btnUpload').addEventListener('click', async (e) => {
     clean: $('#webClean').checked,
   });
   setBusy(btn, false);
-  if (r.ok) appendLog('ok', `已上传 ${r.files} 个文件\n`);
-  else appendLog('err', r.error + '\n');
+  if (r.ok) {
+    proj.published = true;
+    renderSteps();
+    appendLog('ok', `已上传 ${r.files} 个文件\n`);
+  } else appendLog('err', r.error + '\n');
 });
 
 $('#btnClear').addEventListener('click', () => {
@@ -1012,8 +1130,8 @@ upd.install.addEventListener('click', async () => {
 // ── boot ────────────────────────────────────────────────────
 (async () => {
   await refreshProfiles();
-  await loadConf();
+  await loadConf(state.activeId);
   loadAppInfo();
   syncAuthFields();
-  showTab('project');
+  showTab(state.activeId ? 'project' : 'config');
 })();

@@ -14,9 +14,10 @@ contextBridge.exposeInMainWorld('api', {
     probe: (id) => ipcRenderer.invoke('server:probe', id),
   },
   conf: {
-    load: () => ipcRenderer.invoke('conf:load'),
-    save: (text) => ipcRenderer.invoke('conf:save', text),
+    load: (id) => ipcRenderer.invoke('conf:load', id),
+    save: (payload) => ipcRenderer.invoke('conf:save', payload),
     download: (id) => ipcRenderer.invoke('conf:download', id),
+    remote: (id) => ipcRenderer.invoke('conf:remote', id),
     apply: (payload) => ipcRenderer.invoke('conf:apply', payload),
     pickFile: () => ipcRenderer.invoke('conf:pickFile'),
     saveAs: (text) => ipcRenderer.invoke('conf:saveAs', text),

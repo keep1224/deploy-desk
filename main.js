@@ -167,7 +167,7 @@ function countFiles(dir) {
 }
 
 // ── ipc: profiles ───────────────────────────────────────────
-const SETTING_KEYS = ['scriptsDir', 'repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webClean', 'theme'];
+const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webClean', 'theme'];
 
 ipcMain.handle('profile:list', () => {
   const store = readStore();
@@ -183,14 +183,18 @@ ipcMain.handle('profile:list', () => {
 
 ipcMain.handle('profile:save', (_e, payload) => {
   const store = readStore();
+  const host = payload.host?.trim();
+  const username = payload.username?.trim();
+  if (!host) return { ok: false, error: '主机不能为空' };
+  if (!username) return { ok: false, error: '用户不能为空' };
   const existing = store.profiles.find((p) => p.id === payload.id) || { id: payload.id || cryptoId() };
   const profile = {
     ...existing,
     id: existing.id,
-    name: payload.name?.trim() || payload.host,
-    host: payload.host?.trim(),
+    name: payload.name?.trim() || host,
+    host,
     port: payload.port,
-    username: payload.username?.trim(),
+    username,
     auth: payload.auth === 'password' ? 'password' : 'key',
     keyPath: payload.keyPath || '',
   };
@@ -307,15 +311,10 @@ ipcMain.handle('server:probe', async (_e, id) => {
 });
 
 // ── ipc: projects.conf ──────────────────────────────────────
-const confPath = () => path.join(app.getPath('userData'), 'projects.conf');
+const confPath = (id) => path.join(app.getPath('userData'), id ? `projects-${id}.conf` : 'projects.conf');
 
-ipcMain.handle('conf:load', () => {
-  const store = readStore();
-  const candidates = [
-    store.confPath,
-    confPath(),
-    store.scriptsDir ? path.join(store.scriptsDir, 'projects.conf') : null,
-  ].filter(Boolean);
+ipcMain.handle('conf:load', (_e, id) => {
+  const candidates = [id ? confPath(id) : null, confPath()].filter(Boolean);
   for (const p of candidates) {
     try {
       return { ok: true, text: fs.readFileSync(p, 'utf8'), path: p };
@@ -336,9 +335,6 @@ ipcMain.handle('conf:pickFile', async () => {
   if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
   const file = r.filePaths[0];
   const text = fs.readFileSync(file, 'utf8');
-  const store = readStore();
-  store.confPath = file;
-  writeStore(store);
   return { ok: true, path: file, text };
 });
 
@@ -350,30 +346,41 @@ ipcMain.handle('conf:saveAs', async (_e, text) => {
   });
   if (r.canceled || !r.filePath) return { ok: false, canceled: true };
   fs.writeFileSync(r.filePath, text, 'utf8');
-  const store = readStore();
-  store.confPath = r.filePath;
-  writeStore(store);
   return { ok: true, path: r.filePath };
 });
 
-ipcMain.handle('conf:save', (_e, text) => {
-  fs.mkdirSync(path.dirname(confPath()), { recursive: true });
-  fs.writeFileSync(confPath(), text, 'utf8');
-  return { ok: true, path: confPath() };
+ipcMain.handle('conf:save', (_e, { id, text }) => {
+  const p = confPath(id);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, text, 'utf8');
+  return { ok: true, path: p };
+});
+
+async function readRemoteConf(id) {
+  const profile = resolveProfile(id);
+  return withConn(profile, async (conn) => {
+    const sftp = await sftpOf(conn);
+    return new Promise((resolve, reject) =>
+      sftp.readFile('/opt/deploy/projects.conf', (err, buf) =>
+        err ? reject(new Error('服务器上没有 /opt/deploy/projects.conf')) : resolve(buf.toString()),
+      ),
+    );
+  });
+}
+
+ipcMain.handle('conf:remote', async (_e, id) => {
+  try {
+    return { ok: true, text: await readRemoteConf(id) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('conf:download', async (_e, id) => {
   try {
-    const profile = resolveProfile(id);
-    const text = await withConn(profile, async (conn) => {
-      const sftp = await sftpOf(conn);
-      return new Promise((resolve, reject) =>
-        sftp.readFile('/opt/deploy/projects.conf', (err, buf) =>
-          err ? reject(new Error('服务器上没有 /opt/deploy/projects.conf')) : resolve(buf.toString()),
-        ),
-      );
-    });
-    fs.writeFileSync(confPath(), text, 'utf8');
+    const text = await readRemoteConf(id);
+    fs.mkdirSync(path.dirname(confPath(id)), { recursive: true });
+    fs.writeFileSync(confPath(id), text, 'utf8');
     return { ok: true, text };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -405,21 +412,27 @@ ipcMain.handle('nginx:show', async (_e, id) => {
   }
 });
 
-ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
+const SCRIPT_NAMES = ['apply.sh', 'add-project.sh', 'post-receive', 'db.sh'];
+
+function bundledScriptsDir() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'server')
+    : path.join(__dirname, 'server');
+}
+
+ipcMain.handle('conf:apply', async (_e, { id, text }) => {
   try {
     const profile = resolveProfile(id);
-    if (!scriptsDir) throw new Error('未设置脚本目录（scripts/deploy）');
-    const names = ['apply.sh', 'add-project.sh', 'post-receive', 'db.sh'];
-    for (const n of names) {
-      if (!fs.existsSync(path.join(scriptsDir, n))) throw new Error(`缺少脚本: ${path.join(scriptsDir, n)}`);
-    }
+    const dir = bundledScriptsDir();
+    const missing = SCRIPT_NAMES.filter((n) => !fs.existsSync(path.join(dir, n)));
+    if (missing.length) throw new Error(`内置部署脚本缺失: ${missing.join(', ')}（${dir}）`);
 
     log('info', `\n$ 上传部署脚本 → ${profile.host}:/opt/deploy`);
     const result = await withConn(profile, async (conn) => {
       const sftp = await sftpOf(conn);
       await mkdirp(sftp, '/opt/deploy');
-      for (const n of names) {
-        await putFile(sftp, path.join(scriptsDir, n), `/opt/deploy/${n}`);
+      for (const n of SCRIPT_NAMES) {
+        await putFile(sftp, path.join(dir, n), `/opt/deploy/${n}`);
         log('info', `  uploaded ${n}`);
       }
       fs.writeFileSync(path.join(app.getPath('temp'), 'projects.conf'), text, 'utf8');
@@ -432,7 +445,8 @@ ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
       return r;
     });
 
-    fs.writeFileSync(confPath(), text, 'utf8');
+    fs.mkdirSync(path.dirname(confPath(id)), { recursive: true });
+    fs.writeFileSync(confPath(id), text, 'utf8');
     return { ok: result.code === 0, code: result.code, out: result.out };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -443,14 +457,17 @@ ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
 ipcMain.handle('db:list', async (_e, id) => {
   try {
     const profile = resolveProfile(id);
-    const { dbOut, webOut } = await withConn(profile, async (conn) => {
+    const { dbOut, webOut, portsOut } = await withConn(profile, async (conn) => {
       const db = await exec(conn, 'bash /opt/deploy/db.sh list 2>/dev/null', { silent: true });
       const web = await exec(
         conn,
         'find /var/www -mindepth 1 -maxdepth 1 -type d -printf "%f\\n" 2>/dev/null',
         { silent: true },
       );
-      return { dbOut: db.out, webOut: web.out };
+      const ports = await exec(conn, `ss -lntH 2>/dev/null | awk '{print $4}' | sed 's/.*://'`, {
+        silent: true,
+      });
+      return { dbOut: db.out, webOut: web.out, portsOut: ports.out };
     });
     const rows = dbOut
       .split('\n')
@@ -470,7 +487,7 @@ ipcMain.handle('db:list', async (_e, id) => {
       seen.add(name);
       rows.push({ name, db: '-', exists: false, size: '-', tables: '-', web: true });
     }
-    return { ok: true, rows };
+    return { ok: true, rows, ports: portsOut.trim().split(/\s+/).filter(Boolean) };
   } catch (err) {
     return { ok: false, error: err.message };
   }

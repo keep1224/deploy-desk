@@ -40,6 +40,12 @@
       "docs/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "server",
+        "to": "server"
+      }
+    ],
     "win": {
       "target": [
         "nsis",
