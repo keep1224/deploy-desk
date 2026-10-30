@@ -28,7 +28,13 @@ function writeStore(data) {
 
 function publicProfile(p) {
   const { passwordEnc, passphraseEnc, ...rest } = p;
-  return { ...rest, hasPassword: !!passwordEnc, hasPassphrase: !!passphraseEnc };
+  return {
+    ...rest,
+    password: secretOf(p, 'password'),
+    passphrase: secretOf(p, 'passphrase'),
+    hasPassword: !!passwordEnc,
+    hasPassphrase: !!passphraseEnc,
+  };
 }
 
 function secretOf(profile, field) {

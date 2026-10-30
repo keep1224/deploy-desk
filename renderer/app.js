@@ -96,12 +96,14 @@ function fillForm(profile) {
   field(form, 'username').value = profile.username || '';
   field(form, 'auth').value = profile.auth || 'key';
   field(form, 'keyPath').value = profile.keyPath || '';
+  field(form, 'password').value = profile.password || '';
+  field(form, 'passphrase').value = profile.passphrase || '';
   field(form, 'password').placeholder = profile.hasPassword
-    ? '已保存在本地，留空表示不修改'
-    : '输入密码后点保存，会加密存在本地';
+    ? '已保存，可直接修改'
+    : '输入密码后点保存';
   field(form, 'passphrase').placeholder = profile.hasPassphrase
-    ? '已保存在本地，留空表示不修改'
-    : '留空表示不修改';
+    ? '已保存，可直接修改'
+    : '可选';
   syncAuthFields();
 }
 
@@ -130,12 +132,8 @@ $('#profileForm').addEventListener('submit', async (e) => {
   if (r.ok) {
     appendLog('info', `已保存连接 ${r.profile.name}\n`);
     if (payload.password) {
-      if (state.canStoreSecrets) appendLog('ok', '密码已加密保存在本地，之后测试连接、上传、迁移都不必再输入\n');
-      else appendLog('err', '系统不支持安全存储，密码没有保存\n');
-    }
-    field(form, 'passphrase').value = '';
-    field(form, 'password').value = '';
-    await refreshProfiles(r.profile.id);
+      if (state.canStoreSecrets) appendLog('ok', '密码已加密保存，下次打开会直接回填\n');
+      else appendLog('err', '系统不支持安全存储，密码没有保存\n');    }    await refreshProfiles(r.profile.id);
   } else {
     appendLog('err', `保存失败: ${r.error || ''}\n`);
   }
