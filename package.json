@@ -1,6 +1,6 @@
 {
   "name": "deploy-desk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Desktop panel for a small Linux server: SSH health probe, project provisioning via projects.conf, backend git-push deploy, frontend SFTP upload.",
   "author": "keep1224",
