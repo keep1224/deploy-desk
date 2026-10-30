@@ -159,12 +159,16 @@ function countFiles(dir) {
 }
 
 // ── ipc: profiles ───────────────────────────────────────────
+const SETTING_KEYS = ['scriptsDir', 'repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webClean'];
+
 ipcMain.handle('profile:list', () => {
   const store = readStore();
+  const settings = {};
+  for (const k of SETTING_KEYS) settings[k] = store[k];
   return {
     profiles: store.profiles.map(publicProfile),
     lastProfileId: store.lastProfileId,
-    scriptsDir: store.scriptsDir || '',
+    settings,
     canStoreSecrets: safeStorage.isEncryptionAvailable(),
   };
 });
@@ -211,7 +215,10 @@ ipcMain.handle('profile:delete', (_e, id) => {
 
 ipcMain.handle('settings:save', (_e, payload) => {
   const store = readStore();
-  if (typeof payload.scriptsDir === 'string') store.scriptsDir = payload.scriptsDir;
+  for (const k of SETTING_KEYS) {
+    if (payload[k] === undefined) continue;
+    store[k] = typeof payload[k] === 'boolean' ? payload[k] : String(payload[k]);
+  }
   writeStore(store);
   return { ok: true };
 });

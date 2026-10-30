@@ -34,6 +34,32 @@ function dot(stateName) {
   el.title = stateName === 'on' ? '已连接' : stateName === 'off' ? '连接失败' : '未连接';
 }
 
+// ── persisted settings ──────────────────────────────────────
+const SETTING_FIELDS = {
+  scriptsDir: '#scriptsDir',
+  repoDir: '#repoDir',
+  distDir: '#distDir',
+  gitRemote: '#gitRemote',
+  gitBranch: '#gitBranch',
+  webTarget: '#webTarget',
+};
+
+function applySettings(s) {
+  for (const [k, sel] of Object.entries(SETTING_FIELDS)) {
+    if (typeof s[k] === 'string') $(sel).value = s[k];
+  }
+  if (typeof s.webClean === 'boolean') $('#webClean').checked = s.webClean;
+}
+
+function persistSettings(payload) {
+  window.api.settings.save(payload);
+}
+
+for (const [k, sel] of Object.entries(SETTING_FIELDS)) {
+  $(sel).addEventListener('change', (e) => persistSettings({ [k]: e.target.value.trim() }));
+}
+$('#webClean').addEventListener('change', (e) => persistSettings({ webClean: e.target.checked }));
+
 // ── profiles ────────────────────────────────────────────────
 async function refreshProfiles(selectId) {
   const data = await window.api.profiles.list();
@@ -52,7 +78,7 @@ async function refreshProfiles(selectId) {
   state.activeId = selectId || data.lastProfileId || data.profiles[0]?.id || null;
   if (state.activeId) select.value = state.activeId;
 
-  $('#scriptsDir').value = data.scriptsDir || '';
+  applySettings(data.settings || {});
   $('#secretHint').textContent = data.canStoreSecrets
     ? '密码/私钥口令会加密保存在系统凭据中'
     : '系统不支持安全存储，密码不会保存';
@@ -212,18 +238,22 @@ $('#btnPickScripts').addEventListener('click', async () => {
   const dir = await window.api.pickDir();
   if (!dir) return;
   $('#scriptsDir').value = dir;
-  await window.api.settings.save({ scriptsDir: dir });
+  persistSettings({ scriptsDir: dir });
 });
 
 // ── publish ─────────────────────────────────────────────────
 $('#btnPickRepo').addEventListener('click', async () => {
   const dir = await window.api.pickDir();
-  if (dir) $('#repoDir').value = dir;
+  if (!dir) return;
+  $('#repoDir').value = dir;
+  persistSettings({ repoDir: dir });
 });
 
 $('#btnPickDist').addEventListener('click', async () => {
   const dir = await window.api.pickDir();
-  if (dir) $('#distDir').value = dir;
+  if (!dir) return;
+  $('#distDir').value = dir;
+  persistSettings({ distDir: dir });
 });
 
 $('#btnPush').addEventListener('click', async (e) => {
