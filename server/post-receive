@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Runs on the server for every push (installed by git-deploy-setup.sh).
+#
+# checkout → install → build → migrate → restart → health check. The restart is
+# last on purpose: if any earlier step fails, `dist/` is still the previous
+# build and the running service is untouched.
+set -euo pipefail
+
+APP_DIR=${APP_DIR:-/opt/my-rspack-app}
+BARE_DIR=${BARE_DIR:-/opt/git/my-rspack-app.git}
+BRANCH=${BRANCH:-master}
+OWNER=${OWNER:-nestapp}
+SERVICE=${SERVICE:-nest-app}
+PORT=${PORT:-3000}
+NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=1024}
+# The service account has no login home (its passwd home is the app dir itself),
+# so pnpm gets a dedicated one for its store and caches.
+HOME_DIR=${HOME_DIR:-/var/lib/$OWNER}
+
+exec 9>/tmp/nest-app-deploy.lock
+flock -n 9 || { echo 'another deploy is running; push again later' >&2; exit 1; }
+trap 'echo "!! deploy failed — the service still runs the previous build" >&2' ERR
+
+deploy=no
+while read -r _old new ref; do
+  if [[ $ref == "refs/heads/$BRANCH" && $new != 0000000000000000000000000000000000000000 ]]; then
+    deploy=yes
+  fi
+done
+[[ $deploy == yes ]] || { echo "no update to $BRANCH; nothing to deploy"; exit 0; }
+
+git --git-dir="$BARE_DIR" --work-tree="$APP_DIR" checkout -f "$BRANCH"
+chown -R "$OWNER":"$OWNER" "$APP_DIR"
+# git exports these for hooks; leaking them into pnpm/prisma is asking for trouble.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+
+install -d -o "$OWNER" -g "$OWNER" "$HOME_DIR"
+
+as_app() {
+  runuser -u "$OWNER" -- env HOME="$HOME_DIR" NODE_OPTIONS="$NODE_OPTIONS" \
+    bash -c "cd '$APP_DIR' && $1"
+}
+
+echo '==> install'
+as_app 'pnpm install --frozen-lockfile'
+echo '==> build'
+as_app 'pnpm build'
+
+# Projects provisioned with db=none (or not using Prisma) must not run migrations.
+if [[ ! -f $APP_DIR/prisma/schema.prisma ]] || grep -q '^DATABASE_ENABLED=false' "$APP_DIR/.env" 2>/dev/null; then
+  echo '==> migrate (skipped: no database)'
+else
+  echo '==> migrate'
+  as_app 'pnpm exec prisma migrate deploy'
+fi
+
+echo "==> restart $SERVICE"
+systemctl restart "$SERVICE"
+
+for i in $(seq 1 60); do
+  if curl -fsS -m 2 "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+    echo "==> healthy after ${i}s: $(git --git-dir="$BARE_DIR" rev-parse --short "$BRANCH")"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo '!! health check timed out; recent logs:' >&2
+journalctl -u "$SERVICE" -n 40 --no-pager >&2
+exit 1
