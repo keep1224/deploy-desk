@@ -55,6 +55,7 @@ jobs:
             release/*.dmg
             release/*.AppImage
             release/*.deb
+            release/latest*.yml
 
   release:
     needs: build

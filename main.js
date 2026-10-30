@@ -1,10 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, nativeTheme } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { Client } = require('ssh2');
 
 let win = null;
+let guideWin = null;
 
 function log(kind, text) {
   if (win && !win.isDestroyed()) win.webContents.send('log', { kind, text });
@@ -165,7 +167,7 @@ function countFiles(dir) {
 }
 
 // ── ipc: profiles ───────────────────────────────────────────
-const SETTING_KEYS = ['scriptsDir', 'repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webClean'];
+const SETTING_KEYS = ['scriptsDir', 'repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webClean', 'theme'];
 
 ipcMain.handle('profile:list', () => {
   const store = readStore();
@@ -261,7 +263,7 @@ echo "@@mysql"; mysql --version 2>/dev/null || echo "missing"
 echo "@@mem";   free -m | awk '/Mem:/{print $2} /Swap:/{print $2}'
 echo "@@swap";  swapon --show 2>/dev/null | tail -n +2 | wc -l
 echo "@@svc";   systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | awk '{print $1}' | grep -E '^(nest-|node|nginx|mysql|mariadb)' || true
-echo "@@ports"; ss -lntH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | sort -nu | tr '\\n' ' '
+echo "@@ports"; ss -lntH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | sort -nu | tr '\\n' ' '; echo
 echo "@@apps";  ls -1 /opt/apps 2>/dev/null || true
 echo "@@git";   ls -1 /opt/git 2>/dev/null || true
 echo "@@hooks"; find /opt/git -maxdepth 3 -name post-receive -path '*/hooks/*' 2>/dev/null | wc -l
@@ -271,7 +273,7 @@ ipcMain.handle('server:probe', async (_e, id) => {
   try {
     const profile = resolveProfile(id);
     log('info', `\n$ 采集服务器状态 ${profile.host}`);
-    const r = await withConn(profile, (conn) => exec(conn, PROBE));
+    const r = await withConn(profile, (conn) => exec(conn, PROBE, { silent: true }));
     const data = {};
     let key = null;
     for (const line of r.out.split('\n')) {
@@ -283,16 +285,17 @@ ipcMain.handle('server:probe', async (_e, id) => {
         data[key] += (data[key] ? '\n' : '') + line;
       }
     }
+    const pick = (text, re) => (String(text || '').match(re) || [])[1] || String(text || '').trim();
     const ports = (data.ports || '').trim().split(/\s+/).filter(Boolean);
     return {
       ok: true,
       node: data.node,
       pnpm: data.pnpm,
-      nginx: data.nginx,
-      mysql: data.mysql,
+      nginx: pick(data.nginx, /nginx\/([\d.]+)/),
+      mysql: pick(data.mysql, /(\d+\.\d+\.\d+)/),
       mem: data.mem,
       swapFiles: Number(data.swap || 0),
-      services: (data.svc || '').trim().split('\n').filter(Boolean),
+      services: (data.svc || '').trim().split('\n').filter(Boolean).map((s) => s.replace(/\.service$/, '')),
       ports,
       apps: (data.apps || '').trim().split('\n').filter(Boolean),
       repos: (data.git || '').trim().split('\n').filter(Boolean),
@@ -377,6 +380,31 @@ ipcMain.handle('conf:download', async (_e, id) => {
   }
 });
 
+// ── ipc: nginx ──────────────────────────────────────────────
+const NGINX_CONF = '/etc/nginx/conf.d/projects.conf';
+
+ipcMain.handle('nginx:show', async (_e, id) => {
+  try {
+    const profile = resolveProfile(id);
+    const cmd = [
+      'nginx -t 2>&1',
+      `echo '@@CONF'`,
+      `if [ -f ${NGINX_CONF} ]; then cat ${NGINX_CONF}; else echo "服务器上还没有 ${NGINX_CONF}，先点「应用更改」"; fi`,
+    ].join('; ');
+    const r = await withConn(profile, (conn) => exec(conn, cmd, { silent: true }));
+    const [test, ...rest] = r.out.split('@@CONF');
+    return {
+      ok: true,
+      test: String(test || '').trim(),
+      pass: /test is successful/.test(test) && !/emerg|\[error\]/.test(test),
+      warn: /\[warn\]/.test(test),
+      conf: rest.join('@@CONF').replace(/^\n/, '').trimEnd(),
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
   try {
     const profile = resolveProfile(id);
@@ -415,10 +443,16 @@ ipcMain.handle('conf:apply', async (_e, { id, text, scriptsDir }) => {
 ipcMain.handle('db:list', async (_e, id) => {
   try {
     const profile = resolveProfile(id);
-    const r = await withConn(profile, (conn) =>
-      exec(conn, 'bash /opt/deploy/db.sh list 2>/dev/null', { silent: true }),
-    );
-    const rows = r.out
+    const { dbOut, webOut } = await withConn(profile, async (conn) => {
+      const db = await exec(conn, 'bash /opt/deploy/db.sh list 2>/dev/null', { silent: true });
+      const web = await exec(
+        conn,
+        'find /var/www -mindepth 1 -maxdepth 1 -type d -printf "%f\\n" 2>/dev/null',
+        { silent: true },
+      );
+      return { dbOut: db.out, webOut: web.out };
+    });
+    const rows = dbOut
       .split('\n')
       .map((l) => l.split('\t'))
       .filter((c) => c.length >= 4 && c[0])
@@ -429,6 +463,13 @@ ipcMain.handle('db:list', async (_e, id) => {
         size: size || '-',
         tables: tables || '-',
       }));
+
+    const seen = new Set(rows.map((row) => row.name));
+    for (const name of webOut.split('\n').map((l) => l.trim())) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      rows.push({ name, db: '-', exists: false, size: '-', tables: '-', web: true });
+    }
     return { ok: true, rows };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -445,6 +486,59 @@ ipcMain.handle('db:run', async (_e, { id, app, action }) => {
       exec(conn, `bash /opt/deploy/db.sh ${action} ${app} 2>&1`),
     );
     return { ok: r.code === 0, code: r.code, out: r.out };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('db:import', async (_e, { id, app }) => {
+  try {
+    const profile = resolveProfile(id);
+    if (!/^[a-z][a-z0-9-]{2,30}$/.test(app || '')) throw new Error('项目名不合法');
+
+    const pick = await dialog.showOpenDialog({
+      title: `导入 SQL 到 ${app}`,
+      properties: ['openFile'],
+      filters: [{ name: 'SQL 文件', extensions: ['sql', 'gz'] }],
+    });
+    if (pick.canceled || !pick.filePaths[0]) return { ok: false, canceled: true };
+    const file = pick.filePaths[0];
+
+    const answer = await dialog.showMessageBox({
+      type: 'warning',
+      buttons: ['取消', '导入'],
+      defaultId: 0,
+      cancelId: 0,
+      message: `把 SQL 导入 ${app} 的数据库？`,
+      detail: `${path.basename(file)} → ${app}\n表结构和同名表会被写入/覆盖，建议先点「备份」。`,
+    });
+    if (answer.response !== 1) return { ok: false, canceled: true };
+
+    const gz = file.toLowerCase().endsWith('.gz');
+    const remote = `/tmp/deploy-desk-import-${Date.now()}.sql${gz ? '.gz' : ''}`;
+    log('info', `\n$ 导入 ${path.basename(file)} → ${app}`);
+
+    const r = await withConn(profile, async (conn) => {
+      const sftp = await sftpOf(conn);
+      log('info', `  上传到 ${remote}`);
+      await putFile(sftp, file, remote);
+      const res = await exec(conn, `bash /opt/deploy/db.sh import ${app} ${remote} 2>&1`);
+      await exec(conn, `rm -f ${remote}`, { silent: true });
+      return res;
+    });
+
+    return { ok: r.code === 0, code: r.code, out: r.out };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('shell:openExternal', async (_e, url) => {
+  try {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('只支持 http/https');
+    await shell.openExternal(parsed.href);
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -504,14 +598,116 @@ ipcMain.handle('dialog:pickDir', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
+// ── ipc: app + updates ──────────────────────────────────────
+ipcMain.handle('app:info', () => ({
+  version: app.getVersion(),
+  packaged: app.isPackaged,
+  platform: process.platform,
+}));
+
+function sendUpdate(payload) {
+  if (win && !win.isDestroyed()) win.webContents.send('update', payload);
+}
+
+function updateBlockReason() {
+  if (!app.isPackaged) return '开发模式（未打包）不检查更新';
+  if (process.env.PORTABLE_EXECUTABLE_DIR) return '便携版不支持自动更新，请下载新的安装包';
+  if (process.platform === 'darwin') return 'macOS 版没有签名，暂不支持应用内更新，请到 Releases 下载';
+  return '';
+}
+
+async function checkForUpdates() {
+  const blocked = updateBlockReason();
+  if (blocked) return { ok: false, error: blocked };
+  try {
+    log('info', '\n$ 检查更新');
+    const r = await autoUpdater.checkForUpdates();
+    return { ok: true, version: r?.updateInfo?.version || '' };
+  } catch (err) {
+    log('err', `检查更新失败: ${err.message}\n`);
+    return { ok: false, error: err.message };
+  }
+}
+
+function setupUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
+  autoUpdater.on('update-available', (info) => sendUpdate({ status: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', (info) => sendUpdate({ status: 'none', version: info.version }));
+  autoUpdater.on('download-progress', (p) =>
+    sendUpdate({
+      status: 'downloading',
+      percent: Math.round(p.percent),
+      transferred: p.transferred,
+      total: p.total,
+    }),
+  );
+  autoUpdater.on('update-downloaded', (info) => sendUpdate({ status: 'downloaded', version: info.version }));
+  autoUpdater.on('error', (err) => sendUpdate({ status: 'error', message: err.message }));
+  if (app.isPackaged && !updateBlockReason()) setTimeout(checkForUpdates, 4000);
+}
+
+ipcMain.handle('update:check', () => checkForUpdates());
+
+ipcMain.handle('update:download', () => {
+  const blocked = updateBlockReason();
+  if (blocked) return { ok: false, error: blocked };
+  log('info', '\n$ 下载更新');
+  autoUpdater.downloadUpdate().catch((err) => {
+    log('err', `下载更新失败: ${err.message}\n`);
+    sendUpdate({ status: 'error', message: err.message });
+  });
+  return { ok: true };
+});
+
+ipcMain.handle('update:install', () => {
+  setImmediate(() => autoUpdater.quitAndInstall());
+  return { ok: true };
+});
+
+function openGuide() {
+  if (guideWin && !guideWin.isDestroyed()) {
+    guideWin.show();
+    guideWin.focus();
+    return { ok: true };
+  }
+  guideWin = new BrowserWindow({
+    width: 1000,
+    height: 860,
+    minWidth: 720,
+    minHeight: 520,
+    title: 'Deploy Desk 使用说明',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1218' : '#f4f6fa',
+    autoHideMenuBar: true,
+    webPreferences: { sandbox: true },
+  });
+  guideWin.removeMenu();
+  guideWin.on('closed', () => {
+    guideWin = null;
+  });
+  guideWin.loadFile(path.join(__dirname, 'docs', 'guide.html'));
+  return { ok: true };
+}
+
+ipcMain.handle('guide:open', () => {
+  try {
+    return openGuide();
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ── window ──────────────────────────────────────────────────
 function createWindow() {
+  const theme = readStore().theme;
+  const dark = theme === 'light' ? false : theme === 'dark' ? true : nativeTheme.shouldUseDarkColors;
   win = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 1120,
     minHeight: 640,
-    backgroundColor: '#12151b',
+    backgroundColor: dark ? '#12151b' : '#eef1f6',
     title: 'Deploy Desk',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -535,6 +731,9 @@ if (!app.requestSingleInstanceLock()) {
     win.show();
     win.focus();
   });
-  app.whenReady().then(createWindow);
+  app.whenReady().then(() => {
+    createWindow();
+    setupUpdater();
+  });
   app.on('window-all-closed', () => app.quit());
 }

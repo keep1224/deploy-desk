@@ -8,43 +8,82 @@
   </head>
   <body>
     <aside class="side">
-      <div class="brand">Deploy Desk</div>
+      <div class="brand"><span class="logo">D</span>Deploy Desk</div>
+
       <nav class="nav">
-        <button class="nav-item active" data-tab="project">项目</button>
-        <button class="nav-item" data-tab="config">配置</button>
-        <button class="nav-item" data-tab="publish">发布</button>
+        <button class="nav-item active" data-tab="project">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+          <span>项目</span>
+        </button>
+        <button class="nav-item" data-tab="config">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 17h16" />
+            <circle cx="9" cy="7" r="2.2" />
+            <circle cx="15" cy="17" r="2.2" />
+          </svg>
+          <span>配置</span>
+        </button>
+        <button class="nav-item" data-tab="publish">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15V4" />
+            <path d="M7.5 8.5L12 4l4.5 4.5" />
+            <path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+          </svg>
+          <span>发布</span>
+        </button>
       </nav>
+
       <div class="side-foot">
-        <label for="profileSelect">连接</label>
-        <div class="row">
-          <select id="profileSelect"></select>
+        <div class="conn-label">
+          <span>连接</span>
           <span id="connDot" class="dot" title="未连接"></span>
+        </div>
+        <select id="profileSelect"></select>
+        <div class="foot-row">
+          <button id="btnManageConn" class="btn ghost tiny">管理连接</button>
+          <button id="btnGuide" class="btn ghost tiny icon-btn" title="使用说明" aria-label="使用说明">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.2 9a2.8 2.8 0 1 1 4 2.5c-.7.4-1.2 1-1.2 1.8v.4" />
+              <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button id="btnSettings" class="btn ghost tiny icon-btn" title="设置" aria-label="设置" aria-haspopup="dialog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>
 
     <main class="content">
       <section class="panel" id="tab-project">
-        <section class="card">
-          <div class="card-head">
-            <h2>项目</h2>
-            <div class="card-tools">
-              <span id="projSummary" class="hint">—</span>
-              <span id="confDirty" class="chip warn" hidden>未应用</span>
-              <button id="btnProjRefresh" class="btn">刷新服务器状态</button>
-              <button id="btnApplyConf" class="btn primary">应用更改</button>
-            </div>
+        <header class="page-head">
+          <div>
+            <h1>项目</h1>
+            <p id="projSummary" class="page-sub">—</p>
           </div>
+          <div class="page-actions">
+            <span id="confDirty" class="chip warn" hidden>未应用</span>
+            <button id="btnProjRefresh" class="btn">刷新状态</button>
+            <button id="btnApplyConf" class="btn primary">应用更改</button>
+          </div>
+        </header>
 
+        <section class="card table-card">
           <div class="table-scroll">
             <table class="tbl proj-tbl" id="projTable">
               <thead>
                 <tr>
                   <th>项目</th>
-                  <th>类型</th>
-                  <th>端口</th>
-                  <th>域名</th>
-                  <th>上游</th>
+                  <th>入口</th>
                   <th>数据库</th>
                   <th>状态</th>
                   <th class="col-actions">操作</th>
@@ -53,16 +92,16 @@
               <tbody></tbody>
             </table>
           </div>
-
-          <div class="row actions">
-            <button id="btnAddProject" class="btn">+ 新增项目</button>
-            <span class="hint">会在原始配置末尾追加一行模板，改完点右上角「应用更改」</span>
+          <div class="table-foot">
+            <button id="btnAddProject" class="btn ghost">+ 新增项目</button>
+            <span class="hint">在配置末尾追加一行模板，改完点「应用更改」</span>
           </div>
         </section>
 
         <section class="card">
           <button type="button" class="section-toggle" id="btnToggleConf">
-            <span class="caret">▸</span> 原始配置 <code>projects.conf</code>
+            <span class="caret">▸</span>
+            <span>原始配置 <code>projects.conf</code></span>
             <span id="confPathHint" class="hint"></span>
           </button>
 
@@ -89,105 +128,190 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
             </p>
           </div>
         </section>
+
+        <section class="card">
+          <div class="nginx-line">
+            <div class="nginx-meta">
+              <div class="nginx-title">服务器 nginx 配置</div>
+              <div class="nginx-path">/etc/nginx/conf.d/projects.conf</div>
+            </div>
+            <div class="nginx-side">
+              <span id="nginxState" class="hint">未读取</span>
+              <button id="btnOpenNginx" class="btn">查看</button>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section class="panel" id="tab-config" hidden>
-        <section class="card">
-          <h2>服务器状态</h2>
-          <div class="row actions">
-            <button id="btnTest" class="btn">测试连接</button>
-            <button id="btnProbe" class="btn">采集状态</button>
+        <header class="page-head">
+          <div>
+            <h1>配置</h1>
+            <p class="page-sub">连接信息保存在本机，密码用系统凭据加密</p>
           </div>
-          <dl id="status" class="kv">
-            <dt>Node</dt><dd id="st-node">—</dd>
-            <dt>pnpm</dt><dd id="st-pnpm">—</dd>
-            <dt>Nginx</dt><dd id="st-nginx">—</dd>
-            <dt>MySQL</dt><dd id="st-mysql">—</dd>
-            <dt>内存 / Swap</dt><dd id="st-mem">—</dd>
-            <dt>服务</dt><dd id="st-svc">—</dd>
-            <dt>监听端口</dt><dd id="st-ports">—</dd>
-            <dt>项目目录</dt><dd id="st-apps">—</dd>
-            <dt>bare 仓库</dt><dd id="st-repos">—</dd>
-          </dl>
-        </section>
+        </header>
 
-        <section class="card">
-          <h2>连接配置</h2>
-          <form id="profileForm" class="form">
-            <label>名称<input name="name" placeholder="生产服务器" /></label>
-            <div class="row">
-              <label>主机<input name="host" placeholder="185.242.234.143" required /></label>
-              <label class="narrow">端口<input name="port" value="22" /></label>
+        <div class="split">
+          <section class="card">
+            <div class="card-head">
+              <h2>服务器状态</h2>
+              <div class="card-tools">
+                <button id="btnTest" class="btn">测试连接</button>
+                <button id="btnProbe" class="btn">采集状态</button>
+              </div>
             </div>
-            <label>用户<input name="username" placeholder="root" /></label>
-            <div class="row">
-              <label>认证
-                <select name="auth">
-                  <option value="key">私钥</option>
-                  <option value="password">密码</option>
-                </select>
-              </label>
-            </div>
-            <div data-auth="key">
-              <label>私钥路径<input name="keyPath" placeholder="C:\Users\you\.ssh\id_rsa" /></label>
-              <label>私钥密码（可选）<input name="passphrase" type="password" placeholder="可选" /></label>
-            </div>
-            <div data-auth="password" hidden>
-              <label>密码<input name="password" type="password" placeholder="输入密码后点保存" /></label>
-            </div>
-            <div class="row actions">
-              <button type="submit" class="btn primary">保存</button>
-              <button type="button" id="btnDeleteProfile" class="btn danger">删除</button>
-              <button type="button" id="btnNewProfile" class="btn">新建</button>
-            </div>
-            <p id="secretHint" class="hint"></p>
-          </form>
-        </section>
+            <dl id="status" class="kv">
+              <dt>Node</dt><dd id="st-node">—</dd>
+              <dt>pnpm</dt><dd id="st-pnpm">—</dd>
+              <dt>Nginx</dt><dd id="st-nginx">—</dd>
+              <dt>MySQL</dt><dd id="st-mysql">—</dd>
+              <dt>内存 / Swap</dt><dd id="st-mem">—</dd>
+              <dt>服务</dt><dd id="st-svc">—</dd>
+              <dt>监听端口</dt><dd id="st-ports">—</dd>
+              <dt>项目目录</dt><dd id="st-apps">—</dd>
+              <dt>bare 仓库</dt><dd id="st-repos">—</dd>
+            </dl>
+          </section>
+
+          <section class="card">
+            <h2>连接配置</h2>
+            <form id="profileForm" class="form">
+              <label>名称<input name="name" placeholder="生产服务器" /></label>
+              <div class="row">
+                <label class="grow">主机<input name="host" placeholder="185.242.234.143" required /></label>
+                <label class="port-field">端口<input name="port" value="22" /></label>
+              </div>
+              <div class="row">
+                <label class="grow">用户<input name="username" placeholder="root" /></label>
+                <label class="auth-field">认证
+                  <select name="auth">
+                    <option value="key">私钥</option>
+                    <option value="password">密码</option>
+                  </select>
+                </label>
+              </div>
+              <div data-auth="key">
+                <label>私钥路径<input name="keyPath" placeholder="C:\Users\you\.ssh\id_rsa" /></label>
+                <label>私钥密码（可选）<input name="passphrase" type="password" placeholder="可选" /></label>
+              </div>
+              <div data-auth="password" hidden>
+                <label>密码
+                  <span class="input-row">
+                    <input name="password" type="password" placeholder="输入密码后点保存" />
+                    <button type="button" id="btnShowPwd" class="btn tiny">显示</button>
+                  </span>
+                </label>
+              </div>
+              <div class="row actions">
+                <button type="submit" class="btn primary">保存</button>
+                <button type="button" id="btnDeleteProfile" class="btn danger">删除</button>
+                <button type="button" id="btnNewProfile" class="btn">新建</button>
+              </div>
+              <p id="secretHint" class="hint"></p>
+            </form>
+          </section>
+        </div>
       </section>
 
       <section class="panel" id="tab-publish" hidden>
-        <section class="card">
-          <h2>发布后端</h2>
-          <label>仓库目录
-            <div class="row">
-              <input id="repoDir" class="grow" placeholder="D:\code\my-api" />
-              <button id="btnPickRepo" class="btn narrow-btn">选择</button>
-            </div>
-          </label>
-          <div class="row">
-            <label class="grow">远端<input id="gitRemote" value="deploy" /></label>
-            <label class="grow">分支<input id="gitBranch" value="master" /></label>
+        <header class="page-head">
+          <div>
+            <h1>发布</h1>
+            <p class="page-sub">后端走 git push 由服务器钩子构建，前端用 SFTP 覆盖静态目录</p>
           </div>
-          <div class="row actions">
-            <button id="btnPush" class="btn primary">git push 发布</button>
-          </div>
-          <p class="hint">本地推送后，服务器钩子会自动 install → build → migrate → restart</p>
-        </section>
+        </header>
 
-        <section class="card">
-          <h2>发布前端</h2>
-          <label>dist 目录
+        <div class="split">
+          <section class="card">
+            <h2>发布后端</h2>
+            <label>仓库目录
+              <div class="row">
+                <input id="repoDir" class="grow" placeholder="D:\code\my-api" />
+                <button id="btnPickRepo" class="btn narrow-btn">选择</button>
+              </div>
+            </label>
             <div class="row">
-              <input id="distDir" class="grow" placeholder="D:\code\my-web\dist" />
-              <button id="btnPickDist" class="btn narrow-btn">选择</button>
+              <label class="grow">远端<input id="gitRemote" value="deploy" /></label>
+              <label class="grow">分支<input id="gitBranch" value="master" /></label>
             </div>
-          </label>
-          <label>服务器目标目录<input id="webTarget" value="/var/www/app-a-web" /></label>
-          <label class="check"><input id="webClean" type="checkbox" checked /> 上传前清空目标目录</label>
-          <div class="row actions">
-            <button id="btnUpload" class="btn primary">上传</button>
-          </div>
-        </section>
+            <div class="row actions">
+              <button id="btnPush" class="btn primary">git push 发布</button>
+            </div>
+            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart</p>
+          </section>
+
+          <section class="card">
+            <h2>发布前端</h2>
+            <label>dist 目录
+              <div class="row">
+                <input id="distDir" class="grow" placeholder="D:\code\my-web\dist" />
+                <button id="btnPickDist" class="btn narrow-btn">选择</button>
+              </div>
+            </label>
+            <label>服务器目标目录<input id="webTarget" value="/var/www/app-a-web" /></label>
+            <label class="check"><input id="webClean" type="checkbox" checked /> 上传前清空目标目录</label>
+            <div class="row actions">
+              <button id="btnUpload" class="btn primary">上传</button>
+            </div>
+            <p class="hint">项目表里的前端项目点「发前端」会直接传到 <span class="mono">/var/www/&lt;项目名&gt;</span>，用这里的 dist 目录和清空选项。</p>
+          </section>
+        </div>
       </section>
     </main>
 
     <aside class="console-wrap">
       <div class="console-head">
-        <span>执行过程</span>
-        <button id="btnClear" class="btn tiny">清空</button>
+        <span class="console-title"><span class="live-dot"></span>执行过程</span>
+        <button id="btnClear" class="btn ghost tiny">清空</button>
       </div>
       <pre id="console" class="console"></pre>
     </aside>
+
+    <div id="settingsPop" class="settings-pop" role="dialog" aria-label="设置" tabindex="-1" hidden>
+      <div class="pop-row">
+        <span class="pop-title">设置</span>
+        <button id="btnCloseSettings" class="btn ghost tiny">关闭</button>
+      </div>
+
+      <label class="pop-field">主题
+        <select id="themeSelect">
+          <option value="system">跟随系统</option>
+          <option value="dark">深色</option>
+          <option value="light">浅色</option>
+        </select>
+      </label>
+      <p class="hint">只影响 Deploy Desk 窗口，不改系统设置。</p>
+
+      <div class="pop-sep"></div>
+
+      <dl class="kv">
+        <dt>当前版本</dt><dd id="appVersion">—</dd>
+      </dl>
+      <div class="row actions">
+        <button id="btnCheckUpdate" class="btn">检查更新</button>
+        <button id="btnDownloadUpdate" class="btn primary" hidden>下载更新</button>
+        <button id="btnInstallUpdate" class="btn primary" hidden>重启安装</button>
+      </div>
+      <p id="updateStatus" class="hint">启动时会自动检查一次</p>
+      <p class="hint">Windows 安装版和 Linux AppImage 可以直接更新；便携版、macOS 未签名版请到 Releases 下载。</p>
+    </div>
+
+    <div id="nginxModal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nginxModalTitle">
+        <header class="modal-head">
+          <div class="nginx-meta">
+            <h2 id="nginxModalTitle">服务器 nginx 配置</h2>
+            <div class="nginx-path">/etc/nginx/conf.d/projects.conf · 只读，由「应用更改」生成</div>
+          </div>
+          <div class="card-tools">
+            <button id="btnLoadNginx" class="btn ghost tiny">重新读取</button>
+            <button id="btnCloseNginx" class="btn tiny">关闭</button>
+          </div>
+        </header>
+        <div id="nginxTest" class="cfg-status"></div>
+        <pre id="nginxConf" class="cfg-code"></pre>
+      </div>
+    </div>
 
     <script src="app.js"></script>
   </body>

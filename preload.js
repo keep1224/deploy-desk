@@ -21,9 +21,13 @@ contextBridge.exposeInMainWorld('api', {
     pickFile: () => ipcRenderer.invoke('conf:pickFile'),
     saveAs: (text) => ipcRenderer.invoke('conf:saveAs', text),
   },
+  nginx: {
+    show: (id) => ipcRenderer.invoke('nginx:show', id),
+  },
   db: {
     list: (id) => ipcRenderer.invoke('db:list', id),
     run: (payload) => ipcRenderer.invoke('db:run', payload),
+    importSql: (payload) => ipcRenderer.invoke('db:import', payload),
   },
   deploy: {
     push: (payload) => ipcRenderer.invoke('deploy:push', payload),
@@ -32,5 +36,18 @@ contextBridge.exposeInMainWorld('api', {
     upload: (payload) => ipcRenderer.invoke('web:upload', payload),
   },
   pickDir: () => ipcRenderer.invoke('dialog:pickDir'),
+  app: {
+    info: () => ipcRenderer.invoke('app:info'),
+  },
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    download: () => ipcRenderer.invoke('update:download'),
+    install: () => ipcRenderer.invoke('update:install'),
+  },
+  guide: {
+    open: () => ipcRenderer.invoke('guide:open'),
+  },
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   onLog: (fn) => ipcRenderer.on('log', (_e, msg) => fn(msg)),
+  onUpdate: (fn) => ipcRenderer.on('update', (_e, msg) => fn(msg)),
 });

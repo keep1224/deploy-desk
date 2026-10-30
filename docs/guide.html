@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deploy Desk 使用说明</title>
+<style>
+  :root {
+    --bg: #f4f6fa;
+    --surface: #ffffff;
+    --surface-2: #f7f9fc;
+    --border: #e2e8f0;
+    --text: #1c2430;
+    --text-2: #4b5a6d;
+    --muted: #7b8798;
+    --accent: #2f6bd8;
+    --accent-soft: #eaf1fe;
+    --ok: #1c7a4a;
+    --ok-soft: #e8f6ee;
+    --warn: #8a5a00;
+    --warn-soft: #fdf3df;
+    --bad: #a3312b;
+    --bad-soft: #fdecea;
+    --code-bg: #f1f4f9;
+    --radius: 12px;
+    --shadow: 0 10px 30px rgba(25, 39, 58, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1218;
+      --surface: #161d27;
+      --surface-2: #1b2430;
+      --border: #2a3646;
+      --text: #e7edf5;
+      --text-2: #b4c0d0;
+      --muted: #8592a5;
+      --accent: #6f9cff;
+      --accent-soft: #1d2c4a;
+      --ok: #5fd39a;
+      --ok-soft: #163227;
+      --warn: #e0b05a;
+      --warn-soft: #332915;
+      --bad: #ef8a83;
+      --bad-soft: #3a1d1c;
+      --code-bg: #121a24;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.75 "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .layout {
+    display: grid; grid-template-columns: minmax(0, 900px);
+    justify-content: center; padding: 0 24px;
+  }
+  .wrap { min-width: 0; padding: 36px 0 72px; }
+  .sidenav {
+    display: none; position: sticky; top: 0; align-self: start;
+    max-height: 100vh; overflow-y: auto; scrollbar-width: thin;
+    padding: 36px 0 24px;
+  }
+  .sn-head {
+    display: flex; align-items: center; gap: 8px; color: var(--muted);
+    font-size: 12px; letter-spacing: .04em; padding: 0 10px 12px;
+  }
+  .sn-head .logo { width: 22px; height: 22px; border-radius: 6px; font-size: 13px; }
+  .sn-nav { display: flex; flex-direction: column; gap: 1px; margin-left: 10px; border-left: 1px solid var(--border); }
+  .sn-nav a {
+    position: relative; display: flex; align-items: center; gap: 9px;
+    padding: 6px 10px 6px 12px; border-radius: 0 8px 8px 0;
+    color: var(--muted); text-decoration: none; font-size: 13px; line-height: 1.5;
+  }
+  .sn-nav a .n { min-width: 14px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; opacity: .85; }
+  .sn-nav a:hover { color: var(--accent); background: var(--surface-2); }
+  .sn-nav a.on { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .sn-nav a.on::before {
+    content: ""; position: absolute; left: -1px; top: 6px; bottom: 6px; width: 2px;
+    border-radius: 2px; background: var(--accent);
+  }
+  .sn-top {
+    display: inline-flex; align-items: center; gap: 4px; margin: 14px 0 0 10px;
+    padding: 4px 9px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); font-size: 12px; text-decoration: none;
+  }
+  .sn-top:hover { color: var(--accent); }
+  @media (min-width: 980px) {
+    .layout { grid-template-columns: 190px minmax(0, 900px); gap: 28px; align-items: start; }
+    .sidenav { display: block; }
+    nav.toc { display: none; }
+  }
+  @media (min-width: 1280px) {
+    .layout { grid-template-columns: 210px minmax(0, 900px); gap: 44px; padding: 0 32px; }
+  }
+  header.hero {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 32px 34px 28px;
+    box-shadow: var(--shadow);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; letter-spacing: .02em; }
+  .logo {
+    width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px;
+  }
+  h1 { font-size: 30px; line-height: 1.25; margin: 18px 0 8px; letter-spacing: -0.01em; }
+  .hero p { margin: 0; color: var(--text-2); font-size: 15px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); font-size: 12px;
+  }
+  nav.toc {
+    margin: 26px 0 34px; padding: 20px 22px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  nav.toc h2 { margin: 0 0 12px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .06em; }
+  nav.toc ol {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px;
+  }
+  nav.toc a { color: var(--text-2); text-decoration: none; font-size: 14px; display: flex; gap: 9px; padding: 3px 0; }
+  nav.toc a:hover { color: var(--accent); }
+  nav.toc .n { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 16px; }
+  section { margin-top: 40px; scroll-margin-top: 22px; }
+  h2.sec {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 21px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  h2.sec .sn {
+    flex: none; width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+  }
+  h3 { font-size: 16px; margin: 26px 0 10px; }
+  p { margin: 10px 0; color: var(--text-2); }
+  strong { color: var(--text); }
+  a { color: var(--accent); }
+  code {
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.92em; background: var(--code-bg); border-radius: 5px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; overflow: auto; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; font-size: 13px; color: var(--text-2); }
+  .step { position: relative; margin: 26px 0 0; padding-left: 46px; }
+  .step > .num {
+    position: absolute; left: 0; top: 0;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step > h3 { margin: 2px 0 8px; font-size: 16.5px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  figure { margin: 18px 0 22px; }
+  figure .shot {
+    display: block; width: 100%; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface-2); box-shadow: var(--shadow);
+  }
+  figcaption { margin-top: 9px; font-size: 12.5px; color: var(--muted); text-align: center; }
+  figcaption b { color: var(--text-2); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 18px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; background: var(--surface-2); }
+  tr:last-child td { border-bottom: 0; }
+  td code { white-space: nowrap; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .callout { border-radius: 10px; padding: 12px 16px; margin: 16px 0; font-size: 14px; border: 1px solid transparent; }
+  .callout p { margin: 0; color: inherit; }
+  .callout.tip { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text-2); }
+  .callout.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); color: var(--text-2); }
+  .callout b { color: inherit; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .tag.ok { background: var(--ok-soft); color: var(--ok); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .tag.bad { background: var(--bad-soft); color: var(--bad); }
+  .tag.mute { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0 18px; margin: 10px 0; }
+  details[open] { padding-bottom: 12px; }
+  summary { cursor: pointer; padding: 13px 0; font-weight: 600; color: var(--text); }
+  summary::marker { color: var(--muted); }
+  details p { margin: 0 0 8px; }
+  details ul { margin: 6px 0; padding-left: 20px; color: var(--text-2); }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; color: var(--text-2); }
+  .kbd {
+    font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); color: var(--text-2);
+  }
+  footer { margin-top: 52px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; text-align: center; }
+  @media (max-width: 720px) {
+    .layout { padding: 0 14px; }
+    .wrap { padding: 20px 0 48px; }
+    header.hero { padding: 24px 20px; }
+    h1 { font-size: 24px; }
+    nav.toc ol { grid-template-columns: 1fr; }
+    th, td { padding: 8px 9px; }
+  }
+  @media print {
+    body { background: #fff; }
+    .sidenav { display: none; }
+    nav.toc { break-inside: avoid; }
+    figure { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidenav" aria-label="章节导航">
+    <div class="sn-head"><span class="logo">D</span> 使用说明</div>
+    <nav class="sn-nav">
+      <a href="#intro" data-sec="intro"><span class="n">1</span>它是什么</a>
+      <a href="#ui" data-sec="ui"><span class="n">2</span>界面总览</a>
+      <a href="#first-run" data-sec="first-run"><span class="n">3</span>第一次使用</a>
+      <a href="#table" data-sec="table"><span class="n">4</span>项目表怎么看</a>
+      <a href="#publish" data-sec="publish"><span class="n">5</span>日常发布</a>
+      <a href="#database" data-sec="database"><span class="n">6</span>数据库操作</a>
+      <a href="#settings" data-sec="settings"><span class="n">7</span>设置与更新</a>
+      <a href="#faq" data-sec="faq"><span class="n">8</span>常见问题</a>
+      <a href="#security" data-sec="security"><span class="n">9</span>安全与限制</a>
+    </nav>
+    <a class="sn-top" href="#top">↑ 回到顶部</a>
+  </aside>
+
+  <div class="wrap" id="top">
+
+  <header class="hero">
+    <div class="brand"><span class="logo">D</span> Deploy Desk</div>
+    <h1>使用说明</h1>
+    <p>从一台新电脑连上服务器，到发布第一个项目。按顺序读完前两节，就能跑通整套流程。</p>
+    <div class="meta">
+      <span class="pill">版本 v0.3.0</span>
+      <span class="pill">适用于 Windows / macOS / Linux</span>
+      <span class="pill">更新于 2026-10-30</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>目录</h2>
+    <ol>
+      <li><a href="#intro"><span class="n">1</span>它是什么</a></li>
+      <li><a href="#ui"><span class="n">2</span>界面总览</a></li>
+      <li><a href="#first-run"><span class="n">3</span>第一次使用（六步）</a></li>
+      <li><a href="#table"><span class="n">4</span>项目表怎么看</a></li>
+      <li><a href="#publish"><span class="n">5</span>日常发布</a></li>
+      <li><a href="#database"><span class="n">6</span>数据库操作</a></li>
+      <li><a href="#settings"><span class="n">7</span>设置与更新</a></li>
+      <li><a href="#faq"><span class="n">8</span>常见问题</a></li>
+      <li><a href="#security"><span class="n">9</span>安全与限制</a></li>
+    </ol>
+  </nav>
+
+  <section id="intro">
+    <h2 class="sec"><span class="sn">1</span>它是什么</h2>
+    <p>Deploy Desk 是一个装在自己电脑上的"发布面板"，通过 SSH 连到你的 Linux 服务器。它不往服务器装任何常驻程序，也不会把管理页面暴露到公网。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:120px">你要做的事</th><th>在 Deploy Desk 里怎么做</th></tr></thead>
+        <tbody>
+          <tr><td>发布后端</td><td>本地 <code>git push</code>，服务器钩子自动安装依赖、构建、迁移、重启，并做健康检查</td></tr>
+          <tr><td>发布前端</td><td>把本地 <code>dist/</code> 用 SFTP 覆盖到 <code>/var/www/&lt;项目名&gt;</code></td></tr>
+          <tr><td>看服务器状态</td><td>一键采集 Node / Nginx / MySQL / 内存 / 端口 / 服务 / 项目目录</td></tr>
+          <tr><td>备份、迁移、导库</td><td>项目表里的后端行直接点「迁移 / 备份 / 导入」</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout tip">
+      <p><b>密码存在哪？</b>只存在这台电脑上，用系统凭据加密（Windows 用 DPAPI，macOS 用钥匙串）。服务器上的 <code>projects.conf</code> 里不会写密码。</p>
+    </div>
+  </section>
+
+  <section id="ui">
+    <h2 class="sec"><span class="sn">2</span>界面总览</h2>
+    <figure>
+      <img class="shot" src="img/01-project.png" alt="Deploy Desk 项目页：左侧菜单、中间项目表、右侧执行过程" />
+      <figcaption><b>项目页</b>：左边切换页面，中间是当前任务，右边是执行过程日志</figcaption>
+    </figure>
+    <ul>
+      <li><strong>左侧菜单</strong>：只有 <strong>项目 / 配置 / 发布</strong> 三页，按任务划分。</li>
+      <li><strong>左下角</strong>：切换当前服务器连接；「管理连接」跳到配置页；<strong>?</strong> 打开本说明；齿轮打开设置。</li>
+      <li><strong>右侧「执行过程」</strong>：所有命令、上传进度、错误都实时打在这里。出问题先看这里，再点「清空」重新来。</li>
+    </ul>
+  </section>
+
+  <section id="first-run">
+    <h2 class="sec"><span class="sn">3</span>第一次使用（六步）</h2>
+    <p>第一次使用分两段：先把本机连上服务器（第 1–2 步），再让服务器认识你的项目（第 3–4 步），最后才是发布（第 5–6 步）。</p>
+
+    <div class="step">
+      <span class="num">1</span>
+      <h3>配置连接</h3>
+      <p>打开 <strong>配置</strong> 页，在右侧「连接配置」里填：</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:110px">字段</th><th>怎么填</th></tr></thead>
+          <tbody>
+            <tr><td>名称</td><td>随便起，比如「生产服务器」</td></tr>
+            <tr><td>主机</td><td>服务器 IP 或域名，例如 <code>185.242.234.143</code></td></tr>
+            <tr><td>端口</td><td><strong>SSH 端口</strong>，不是网站端口。这台服务器是 <code>5035</code></td></tr>
+            <tr><td>用户</td><td>能执行 <code>sudo</code> / 本身就是 root 的账号，例如 <code>root</code></td></tr>
+            <tr><td>认证</td><td>「密码」或「私钥」。私钥方式填私钥路径，有口令再填口令</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>点 <strong>保存</strong>，再点「服务器状态」卡片右上角的 <strong>测试连接</strong>。左下角的小圆点变绿，说明连通了。</p>
+      <figure>
+        <img class="shot" src="img/02-config.png" alt="配置页：左侧服务器状态，右侧连接配置表单" />
+        <figcaption><b>配置页</b>：先保存连接，再测试；「采集状态」只读，不会改服务器</figcaption>
+      </figure>
+      <div class="callout warn">
+        <p><b>连不上？</b>先确认端口是不是 SSH 端口（不是 80/3000），再确认密码或私钥没问题。服务器安全组/防火墙要放行这个端口。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num">2</span>
+      <h3>看一眼服务器状态（可选）</h3>
+      <p>点 <strong>采集状态</strong>，会显示 Node、pnpm、Nginx、MySQL 版本，内存与 swap，正在跑的服务、监听端口、<code>/opt/apps</code> 和 <code>/opt/git</code> 里已有的项目。这个操作<strong>只读</strong>。</p>
+      <p>如果 Node / pnpm / Nginx / MySQL 显示 <code>missing</code>，先把这些装好再继续。项目模板要求服务器已有 Node 20+、pnpm、Nginx、MySQL 8。</p>
+    </div>
+
+    <div class="step">
+      <span class="num">3</span>
+      <h3>准备项目清单</h3>
+      <p>回到 <strong>项目</strong> 页，点开「原始配置 <code>projects.conf</code>」：</p>
+      <ul>
+        <li><strong>本地脚本目录</strong>：选到 <code>scripts/deploy</code>，里面必须有 <code>apply.sh</code>、<code>add-project.sh</code>、<code>post-receive</code>、<code>db.sh</code> 四个文件。</li>
+        <li>下面的文本框就是项目清单，从服务器下载、从本地加载、或直接改都行。</li>
+        <li>也可以在项目表底部点「+ 新增项目」，会追加一行模板。</li>
+      </ul>
+      <figure>
+        <img class="shot" src="img/06-rawconf.png" alt="项目页展开原始配置：脚本目录、操作按钮和 projects.conf 文本" />
+        <figcaption><b>原始配置</b>：脚本目录 + <code>projects.conf</code>；改完点右上角「应用更改」</figcaption>
+      </figure>
+    </div>
+
+    <div class="step">
+      <span class="num">4</span>
+      <h3>应用更改（第一次会初始化服务器）</h3>
+      <p>点右上角的 <strong>应用更改</strong>。它会：</p>
+      <ol>
+        <li>把四个脚本和 <code>projects.conf</code> 上传到 <code>/opt/deploy</code>；</li>
+        <li>在服务器执行 <code>apply.sh</code>，按清单逐个项目初始化。</li>
+      </ol>
+      <p>每个后端项目会创建：系统用户、<code>/opt/apps/&lt;name&gt;</code>、<code>/opt/git/&lt;name&gt;.git</code>（带 push 钩子）、systemd 服务 <code>nest-&lt;name&gt;</code>、<code>.env</code>、MySQL 库和用户；前端项目会创建 <code>/var/www/&lt;name&gt;</code> 和 nginx 站点。整个过程<strong>幂等</strong>：已经存在的 <code>.env</code>、数据库不会被覆盖。</p>
+      <div class="callout tip">
+        <p><b>第一次执行完</b>：点「刷新状态」，项目表的「状态」列就会从「待初始化」变成「已部署 / 已发布」。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num">5</span>
+      <h3>发布后端</h3>
+      <p>服务器初始化后，本地仓库需要先加一次远程（在项目仓库目录执行，只做一次）：</p>
+      <pre><code>git remote add deploy ssh://root@185.242.234.143:5035/opt/git/app-a-api.git</code></pre>
+      <p>然后在 <strong>发布</strong> 页选仓库目录，远端保持 <code>deploy</code>、分支按需要（默认 <code>master</code>），点 <strong>git push 发布</strong>。服务器收到推送后依次执行：安装依赖 → 构建 → 数据库迁移 → 重启服务 → 健康检查。</p>
+      <p>任何一步失败，服务会继续跑上一个版本。右侧日志会显示卡在哪一步。</p>
+    </div>
+
+    <div class="step">
+      <span class="num">6</span>
+      <h3>发布前端</h3>
+      <p>先本地构建出 <code>dist/</code>，然后两种方式任选：</p>
+      <ul>
+        <li><strong>项目表一键发布</strong>：在前端行点「发前端」。目标目录自动是 <code>/var/www/&lt;项目名&gt;</code>，源目录用发布页里配的 dist 目录，清空选项也用发布页的勾选。上传前会弹确认。</li>
+        <li><strong>发布页手动上传</strong>：填 <code>dist</code> 目录和服务器目标目录（默认 <code>/var/www/app-a-web</code>），点「上传」。</li>
+      </ul>
+      <figure>
+        <img class="shot" src="img/03-publish.png" alt="发布页：左侧发布后端，右侧发布前端" />
+        <figcaption><b>发布页</b>：后端 git push，前端 SFTP；右边的 dist 目录供项目表「发前端」复用</figcaption>
+      </figure>
+      <div class="callout warn">
+        <p><b>「上传前清空目标目录」会先 <code>rm -rf</code> 目标目录再上传。</b>确认 dist 目录选对了再勾选；不确定就先取消勾选。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="table">
+    <h2 class="sec"><span class="sn">4</span>项目表怎么看</h2>
+    <p>一行就是一个项目，从左到右：</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:90px">列</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>项目</td><td>项目名 + 类型徽标：<span class="tag mute">web</span> 静态前端，<span class="tag mute">api</span> Node 后端</td></tr>
+          <tr><td>入口</td><td>域名或本机端口；前端行如果绑定了后端，会显示「→ 后端名」</td></tr>
+          <tr><td>数据库</td><td>表数量与大小；<span class="tag mute">未启用</span> 表示 <code>db=none</code>，<span class="tag bad">缺失</span> 表示库还没建</td></tr>
+          <tr><td>状态</td><td>后端：<span class="tag ok">已部署</span> / <span class="tag warn">待初始化</span>；前端：<span class="tag ok">已发布</span> / <span class="tag warn">未发布</span></td></tr>
+          <tr><td>操作</td><td>「打开」用域名打开站点；后端行有「迁移 / 备份 / 导入」；前端行有「发前端」</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>状态是根据服务器上的实际目录判断的：后端看 <code>/opt/apps/&lt;name&gt;</code>，前端看 <code>/var/www/&lt;name&gt;</code>。所以刚发布完如果没变，点一下「刷新状态」。</p>
+    <p>如果某行配置写错了（项目名不合法、端口或域名重复、web 行指向了不存在的后端等），整行会标红，鼠标悬停能看到原因，「应用更改」也会被拦下。</p>
+    <h3>查看服务器 nginx 配置</h3>
+    <p>项目页底部有「服务器 nginx 配置」卡片，点「查看」会先跑 <code>nginx -t</code>，再只读展示 <code>/etc/nginx/conf.d/projects.conf</code>。这个文件由「应用更改」生成，日常不要手改。</p>
+    <figure>
+      <img class="shot" src="img/05-nginx.png" alt="nginx 配置查看弹窗：nginx -t 结果与配置内容" />
+      <figcaption><b>nginx 查看器</b>：顶部是 <code>nginx -t</code> 结果，下面是当前生成的站点配置</figcaption>
+    </figure>
+  </section>
+
+  <section id="publish">
+    <h2 class="sec"><span class="sn">5</span>日常发布</h2>
+    <h3>后端</h3>
+    <p>改完代码、提交后，在发布页点「git push 发布」。只需要填仓库目录；远端和分支会记住。发布成功后项目表的数据库列会更新。</p>
+    <h3>前端</h3>
+    <p>本地 <code>pnpm build</code> 出新的 <code>dist/</code>，在项目表点「发前端」，确认源目录和目标目录，等日志显示「已上传 N 个文件」。发布成功后状态会变成「已发布」。</p>
+    <h3>查看站点</h3>
+    <p>项目配了域名时，操作列会有「打开」，会用默认浏览器打开。后端项目通常不配域名，只监听 <code>127.0.0.1</code>，由前端 nginx 把 <code>/api/</code> 反代过去。</p>
+  </section>
+
+  <section id="database">
+    <h2 class="sec"><span class="sn">6</span>数据库操作</h2>
+    <p>只对后端行、且已经部署过的项目可用（按钮灰掉说明还没部署）。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:90px">按钮</th><th>实际执行的命令</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>迁移</td><td><code>pnpm exec prisma migrate deploy</code></td><td>以项目用户身份在 <code>/opt/apps/&lt;name&gt;</code> 执行</td></tr>
+          <tr><td>备份</td><td><code>mysqldump ... | gzip</code></td><td>备份到服务器 <code>/var/backups/&lt;name&gt;-时间.sql.gz</code></td></tr>
+          <tr><td>导入</td><td><code>mysql ... &lt; 文件</code></td><td>选本地 <code>.sql</code> 或 <code>.sql.gz</code>，先传到 <code>/tmp</code> 再导入，导入前二次确认</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>数据库连接信息不是让面板填的，而是从每个项目的 <code>/opt/apps/&lt;name&gt;/.env</code> 里的 <code>DATABASE_URL</code> 读取。所以库换机器、换账号，改 <code>.env</code> 后这些按钮自动跟着走。</p>
+    <div class="callout warn">
+      <p><b>导入会覆盖同名表。</b>拿不准时先点「备份」，备份文件在服务器的 <code>/var/backups</code>。</p>
+    </div>
+  </section>
+
+  <section id="settings">
+    <h2 class="sec"><span class="sn">7</span>设置与更新</h2>
+    <figure>
+      <img class="shot" src="img/04-settings.png" alt="设置浮层：主题、当前版本、检查更新" />
+      <figcaption><b>设置</b>：左下角齿轮打开，点空白处或按 <span class="kbd">Esc</span> 收起</figcaption>
+    </figure>
+    <ul>
+      <li><strong>主题</strong>：跟随系统 / 深色 / 浅色，只影响 Deploy Desk 窗口，选择会记住。</li>
+      <li><strong>当前版本</strong>：开发模式会标注「不检查更新」。</li>
+      <li><strong>检查更新</strong>：Windows 安装版和 Linux AppImage 可以直接在应用内下载并「重启安装」。</li>
+    </ul>
+    <p>Windows 免安装版（portable）、macOS 未签名版不支持应用内更新，请到 <a href="https://github.com/keep1224/deploy-desk/releases">GitHub Releases</a> 手动下载。</p>
+  </section>
+
+  <section id="faq">
+    <h2 class="sec"><span class="sn">8</span>常见问题</h2>
+
+    <details>
+      <summary>测试连接失败，提示「密码未保存」或认证失败</summary>
+      <p>先确认认证方式选的是「密码」还是「私钥」。密码方式要重新输入一次并点保存；私钥方式要确认本机存在该文件、私钥口令正确。端口要填 SSH 端口（这台是 5035）。</p>
+    </details>
+
+    <details>
+      <summary>应用更改报「缺少脚本」</summary>
+      <p>「本地脚本目录」必须指向包含 <code>apply.sh</code>、<code>add-project.sh</code>、<code>post-receive</code>、<code>db.sh</code> 的目录，通常是仓库里的 <code>scripts/deploy</code>。选错目录或缺文件都会在上传前被拦下。</p>
+    </details>
+
+    <details>
+      <summary>nginx 弹窗显示「通过，有告警」或报 suspicious symbols</summary>
+      <p>通常是域名列写成了 <code>http://example.com</code>。nginx 的 <code>server_name</code> 只认主机名。把域名改成 <code>example.com</code> 再点「应用更改」即可；现在的 <code>apply.sh</code> 会自动去掉 <code>http(s)://</code> 和结尾斜杠，并按 <code>root</code> 替换旧站点块，不会越积越多。</p>
+    </details>
+
+    <details>
+      <summary>前端发布成功，打开还是旧页面 / 404</summary>
+      <p>确认上传的是 <code>dist</code> 目录里的内容（里面应该有 <code>index.html</code>），而不是项目根目录。还不行就勾选「上传前清空目标目录」重传一次，再刷新浏览器缓存。</p>
+    </details>
+
+    <details>
+      <summary>后端发布后报 502 / 健康检查超时</summary>
+      <p>看右侧日志停在哪一步。常见原因：<code>pnpm install</code> 失败、Prisma 迁移失败、端口被占。也可以在服务器上执行 <code>systemctl status nest-&lt;项目名&gt;</code> 和 <code>journalctl -u nest-&lt;项目名&gt; -n 50</code> 查看。</p>
+    </details>
+
+    <details>
+      <summary>「迁移 / 备份 / 导入」是灰的</summary>
+      <p>这些按钮只对已部署的后端项目开放。先完成「应用更改」和一次后端发布，再点「刷新状态」。</p>
+    </details>
+
+    <details>
+      <summary>前端行一直显示「未发布」</summary>
+      <p>服务器上还没有 <code>/var/www/&lt;项目名&gt;</code> 这个目录。发布一次前端后点「刷新状态」就会变。</p>
+    </details>
+
+    <details>
+      <summary>换电脑或重装系统后密码没了</summary>
+      <p>密码是用当前系统账户加密的，换机器/换账户后无法解密，需要重新输入一次。这是有意的：密码不会以明文落盘。</p>
+    </details>
+
+    <details>
+      <summary>项目名有什么要求</summary>
+      <p>小写字母开头，只能包含小写字母、数字和 <code>-</code>，长度 3–31。它会同时作为目录名、系统用户名、服务名和数据库名（<code>-</code> 会换成 <code>_</code>）。</p>
+    </details>
+  </section>
+
+  <section id="security">
+    <h2 class="sec"><span class="sn">9</span>安全与限制</h2>
+    <ul>
+      <li>面板只跑在自己电脑上，不监听公网端口；服务器上只多了部署脚本和 systemd 服务。</li>
+      <li>连接密码/私钥口令用系统凭据加密，<code>projects.conf</code> 里不存密码。</li>
+      <li>每个后端服务的 <code>.env</code> 权限是 <code>600</code>，数据库只监听本机，应用用独立系统用户运行。</li>
+      <li>2G 内存的服务器默认给每个后端 <code>MemoryMax=384M</code>，后端数量建议 2–3 个以内。</li>
+      <li>「应用更改」会以 root 身份在服务器执行脚本，只在你明确修改配置后点。</li>
+      <li>发布前建议先提交本地代码；推送后服务器会自动构建和重启。</li>
+    </ul>
+  </section>
+
+  <footer>
+    Deploy Desk v0.3.0 · 本说明在应用左下角 <strong>?</strong> 随时打开 · 源文件 <code>docs/guide.html</code>
+  </footer>
+
+  </div>
+</div>
+<script>
+(() => {
+  const links = [...document.querySelectorAll('.sidenav a[data-sec]')];
+  if (!links.length) return;
+  const secs = links.map((a) => document.getElementById(a.dataset.sec)).filter(Boolean);
+  let raf = 0;
+  function sync() {
+    raf = 0;
+    const y = window.scrollY + 130;
+    let active = null;
+    for (const s of secs) if (s.offsetTop <= y) active = s.id;
+    for (const a of links) {
+      const on = a.dataset.sec === active;
+      a.classList.toggle('on', on);
+      if (on) a.setAttribute('aria-current', 'location');
+      else a.removeAttribute('aria-current');
+    }
+  }
+  addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(sync); }, { passive: true });
+  addEventListener('resize', sync);
+  sync();
+  const top = document.querySelector('.sn-top');
+  if (top) top.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+})();
+</script>
+</body>
+</html>

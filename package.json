@@ -13,6 +13,7 @@
     "dist:linux": "electron-builder --linux --publish never"
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "ssh2": "^1.15.0"
   },
   "devDependencies": {
@@ -25,10 +26,18 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "keep1224",
+        "repo": "deploy-desk"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",
       "renderer/**/*",
+      "docs/**/*",
       "package.json"
     ],
     "win": {
