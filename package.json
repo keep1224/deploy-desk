@@ -1,6 +1,6 @@
 {
   "name": "deploy-desk",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "Desktop panel for a small Linux server: SSH health probe, project provisioning via projects.conf, backend git-push deploy, frontend SFTP upload.",
   "author": "keep1224",
@@ -56,10 +56,10 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "${productName}-${version}-setup.${ext}"
+      "artifactName": "Deploy-Desk-${version}-setup.${ext}"
     },
     "portable": {
-      "artifactName": "${productName}-${version}-portable.${ext}"
+      "artifactName": "Deploy-Desk-${version}-portable.${ext}"
     },
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -74,7 +74,7 @@
           ]
         }
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "Deploy-Desk-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": [
@@ -84,7 +84,7 @@
       "category": "Development",
       "maintainer": "keep1224 <keep1224@users.noreply.github.com>",
       "synopsis": "SSH deploy panel for a small Linux server",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "Deploy-Desk-${version}-${arch}.${ext}"
     }
   }
 }

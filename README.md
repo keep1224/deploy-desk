@@ -14,12 +14,12 @@ frontend uploads.
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| Windows | `Deploy Desk-x.y.z-setup.exe` | 安装版（可选安装目录） |
-| Windows | `Deploy Desk-x.y.z-portable.exe` | 免安装，双击即用 |
-| macOS | `Deploy Desk-x.y.z-arm64.dmg` | Apple Silicon（M 系列） |
-| macOS | `Deploy Desk-x.y.z-x64.dmg` | Intel 芯片 |
-| Linux | `Deploy Desk-x.y.z-x86_64.AppImage` | 免安装，`chmod +x` 后直接运行 |
-| Linux | `Deploy Desk-x.y.z-amd64.deb` | Debian / Ubuntu 安装包 |
+| Windows | `Deploy-Desk-x.y.z-setup.exe` | 安装版（可选安装目录） |
+| Windows | `Deploy-Desk-x.y.z-portable.exe` | 免安装，双击即用 |
+| macOS | `Deploy-Desk-x.y.z-arm64.dmg` | Apple Silicon（M 系列） |
+| macOS | `Deploy-Desk-x.y.z-x64.dmg` | Intel 芯片 |
+| Linux | `Deploy-Desk-x.y.z-x86_64.AppImage` | 免安装，`chmod +x` 后直接运行 |
+| Linux | `Deploy-Desk-x.y.z-amd64.deb` | Debian / Ubuntu 安装包 |
 
 没有代码签名：
 
