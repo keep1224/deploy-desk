@@ -497,23 +497,28 @@ function parseConf(text) {
 }
 
 function syncProjects() {
-  proj.rows = parseConf($('#confText').value);
-  normalizeWebDomains();
+  const ta = $('#confText');
+  ta.value = normalizeText(ta.value);
+  proj.rows = parseConf(ta.value);
   renderProjects();
-  $('#confDirty').hidden = $('#confText').value === proj.baseText;
+  $('#confDirty').hidden = !confDirty();
 }
 
-// nginx 的 server_name 不能空着，而域名又不是一列了：载入时就把没写的
-// web 行补成当前连接的主机，清单和状态列显示的地址永远一致
-function normalizeWebDomains() {
+// nginx 的 server_name 不能空着，而域名又不是一列了：把 web 行的地址统一成
+// 当前连接的主机——留空或写 - 的补上，写死的纯 IP 也跟着连接走（换台机器或
+// 换了服务器 IP 时清单自动跟上），真域名保持原样
+function normalizeText(text) {
   const host = siteHostDefault();
-  if (!host) return;
-  const ta = $('#confText');
-  const lines = ta.value.split('\n');
+  if (!host) return text;
+  const lines = text.split('\n');
   let touched = false;
-  proj.rows.forEach((r, idx) => {
-    if (r.type !== 'web' || (r.domain && r.domain !== '-')) return;
-    const i = lineIndexAt(idx);
+  parseConf(text).forEach((r, idx) => {
+    if (r.type !== 'web') return;
+    const cur = String(r.domain || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(cur);
+    if (cur && cur !== '-' && !isIp) return;
+    if (cur === host) return;
+    const i = lineIndexIn(lines, idx);
     if (i < 0) return;
     const next = rowToLine({ ...r, domain: host });
     if (lines[i] !== next) {
@@ -521,15 +526,15 @@ function normalizeWebDomains() {
       touched = true;
     }
   });
-  if (touched) {
-    ta.value = lines.join('\n');
-    proj.rows = parseConf(ta.value);
-  }
+  return touched ? lines.join('\n') : text;
 }
 
 // 清单第 pos 个项目对应文本框的物理行号（跳过注释/空行/残行，与 parseConf 一致）
 function lineIndexAt(pos) {
-  const lines = $('#confText').value.split('\n');
+  return lineIndexIn($('#confText').value.split('\n'), pos);
+}
+
+function lineIndexIn(lines, pos) {
   let seen = -1;
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i].trim();
@@ -581,7 +586,7 @@ function gridEdit(idx, field, raw) {
     lines[i] = rowToLine(r);
     ta.value = lines.join('\n');
   }
-  $('#confDirty').hidden = ta.value === proj.baseText;
+  $('#confDirty').hidden = !confDirty();
   proj.rows = parseConf(ta.value);
   updateRowBad(idx);
   updateDerivedUI();
@@ -653,7 +658,7 @@ function statusCellOf(row) {
   domInp.placeholder = row.type === 'web' ? (host || '站点地址') : '不单独建站';
   domInp.spellcheck = false;
   domInp.title = row.type === 'web'
-    ? `nginx server_name：留空 = 用当前连接的主机${host ? ` ${host}` : '（还没选连接）'}`
+    ? `nginx server_name：留空 = 用当前连接的主机${host ? ` ${host}` : '（还没选连接）'}；写死的 IP 会跟着连接自动更新，真域名保持原样`
     : '后端一般不用填：填了会额外生成一个 80 端口的反代站点，同时作为 CORS 允许的来源';
   td.appendChild(domInp);
   return td;
@@ -1027,7 +1032,8 @@ async function loadConf(id) {
 }
 
 function confDirty() {
-  return $('#confText').value !== proj.baseText;
+  // 拿归一化后的基准比：自动补的地址不算用户改动
+  return $('#confText').value !== normalizeText(proj.baseText);
 }
 
 async function syncConfFromServer() {
