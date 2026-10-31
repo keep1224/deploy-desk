@@ -700,8 +700,8 @@ textarea {
 .proj-tbl tr.bad:hover td { background: rgba(229, 100, 95, .08); }
 .proj-tbl td.actions { text-align: right; white-space: normal; }
 .proj-tbl td.actions .btn {
-  margin: 1px 0 1px 4px;
-  padding: 0 6px;
+  margin: 1px 0 1px 3px;
+  padding: 0 5px;
   opacity: .75;
 }
 .proj-tbl td.actions .btn:not(.ghost) {
@@ -902,24 +902,45 @@ textarea {
 /* ── 日志面板收起：两栏布局，表格占满整行 ──────────────────── */
 body.log-hidden { grid-template-columns: clamp(184px, 15vw, 216px) minmax(0, 1fr); }
 body.log-hidden .console-wrap { display: none; }
-#btnLogShow { position: fixed; right: 14px; bottom: 14px; z-index: 25; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#btnLogShow {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 25;
+  gap: 6px;
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+}
+#btnLogShow.has-log .log-dot { background: var(--accent); }
+#btnLogShow.has-err .log-dot {
+  background: var(--err);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--err), transparent 75%);
+}
+.log-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex: none;
+}
 
 /* ── 项目清单：单元格直接编辑 ──────────────────────────────── */
 /* 8 列可编辑布局比容器宽时宁可横向滚动，也不压缩列宽（否则操作列按钮竖排撑高行）；
    项目列和操作列 sticky，滚动时两边始终可见 */
-.proj-tbl { table-layout: fixed; min-width: 1114px; }
-.proj-tbl .col-actions { width: 264px; }
+.proj-tbl { table-layout: fixed; min-width: 1024px; }
+.proj-tbl .col-actions { width: 212px; }
 .proj-tbl td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
 .proj-tbl .c-type, .proj-tbl .c-port, .proj-tbl .c-db, .proj-tbl .c-st { text-align: center; }
 .proj-tbl .c-type select, .proj-tbl .c-port input, .proj-tbl .c-db select { text-align: center; }
 .proj-tbl .actions { text-align: right; white-space: nowrap; }
-.proj-tbl .c-name { width: 128px; }
+.proj-tbl .c-name { width: 116px; }
 .proj-tbl .c-type { width: 106px; }
-.proj-tbl .c-port { width: 72px; }
-.proj-tbl .c-domain { width: 210px; }
-.proj-tbl .c-api { width: 150px; }
+.proj-tbl .c-port { width: 70px; }
+.proj-tbl .c-domain { width: 196px; }
+.proj-tbl .c-api { width: 144px; }
 .proj-tbl .c-db { width: 84px; }
-.proj-tbl .c-st { width: 100px; }
+.proj-tbl .c-st { width: 96px; }
 .proj-tbl td input[data-field],
 .proj-tbl td select[data-field] {
   width: 100%;

@@ -40,10 +40,19 @@ function appendLog(kind, text) {
   const parts = buf.split('\n');
   logTail.set(kind, parts.pop());
   for (const line of parts) writeLine(kind, line);
+  markLogActivity(kind, text);
 
   clearTimeout(logTimers.get(kind));
   if (logTail.get(kind)) logTimers.set(kind, setTimeout(() => flushTail(kind), 150));
   consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+// 日志默认收起，输出落在看不见的面板里，所以按钮上留个提示点：有输出变蓝，报错变红
+function markLogActivity(kind, text) {
+  if (!String(text || '').trim() || !document.body.classList.contains('log-hidden')) return;
+  const btn = $('#btnLogShow');
+  btn.classList.add('has-log');
+  if (kind === 'err') btn.classList.add('has-err');
 }
 
 window.api.onLog(({ kind, text }) => appendLog(kind || 'out', text));
@@ -130,7 +139,7 @@ function applySettings(s) {
     }
   }
   if (typeof s.webClean === 'boolean') $('#webClean').checked = s.webClean;
-  if (s.logPanel === 'off') setLogVisible(false);
+  if (s.logPanel === 'on') setLogVisible(true, false);
   const theme = typeof s.theme === 'string' ? s.theme : 'system';
   $('#themeSelect').value = theme;
   applyTheme(theme);
@@ -166,11 +175,12 @@ themeMedia.addEventListener('change', () => {
   if ($('#themeSelect').value === 'system') applyTheme('system');
 });
 
-// ── 日志面板收起/展开：收起后表格占满整行，选择记住 ──────────
-function setLogVisible(on) {
+// ── 日志面板收起/展开：默认收起，需要时点右下角按钮展开，选择记住 ──
+function setLogVisible(on, persist = true) {
   document.body.classList.toggle('log-hidden', !on);
   $('#btnLogShow').hidden = on;
-  persistSettings({ logPanel: on ? 'on' : 'off' });
+  if (on) $('#btnLogShow').classList.remove('has-log', 'has-err');
+  if (persist) persistSettings({ logPanel: on ? 'on' : 'off' });
 }
 
 $('#btnLogHide').addEventListener('click', () => setLogVisible(false));
@@ -642,7 +652,7 @@ function gridRowOf(row, idx) {
   if (row.type === 'api') {
     const dbSel = document.createElement('select');
     dbSel.dataset.field = 'db';
-    for (const [v, label] of [['mysql', '自动建库'], ['none', '不建库']]) {
+    for (const [v, label] of [['mysql', '自动'], ['none', '不建']]) {
       const o = document.createElement('option');
       o.value = v;
       o.textContent = label;
@@ -680,7 +690,7 @@ function gridRowOf(row, idx) {
   if (row.type === 'web') {
     const apiSel = document.createElement('select');
     apiSel.dataset.field = 'api';
-    const apiOpts = [['-', '不反代（纯静态）'], ...apis.map((n) => [n, `/api/ → ${n}`])];
+    const apiOpts = [['-', '不反代'], ...apis.map((n) => [n, `→ ${n}`])];
     // 上游指向已删除的 api 时，显式显示出来，不能静默回显成"不反代"
     if (row.api !== '-' && !apis.includes(row.api)) {
       apiOpts.push([row.api, `${row.api}（上游已删除，请重选）`]);
