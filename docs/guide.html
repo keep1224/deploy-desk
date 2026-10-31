@@ -410,7 +410,7 @@
           <tr><td>类型</td><td><span class="tag mute">web</span> 静态前端，由 nginx 提供服务；<span class="tag mute">api</span> Node 后端，跑 systemd 服务</td></tr>
           <tr><td>端口</td><td><b>api</b>：后端自己监听的端口，留空从 3001 起自动分配，只绑 <code>127.0.0.1</code>；<b>web</b>：nginx 对外的 listen 端口，留空就是 80。整张表的端口不能重复</td></tr>
           <tr><td>状态</td><td>见下方状态表；api 行的小字还会显示表数、大小或缺库</td></tr>
-          <tr><td>建库</td><td>仅 api：<b>自动</b>建 MySQL 库（库名=项目名），<b>不建</b>用于纯接口项目；web 恒为 <code>—</code></td></tr>
+          <tr><td>建库</td><td>仅 api：<b>自动建库</b>（库名=项目名），<b>不建库</b>用于纯接口项目；web 恒为 <code>—</code></td></tr>
           <tr><td>域名</td><td>只写主机名或 IP，例如 <code>example.com</code>，不要带 <code>http://</code>。web 必填；api 可空，填了会额外生成 80 端口反代站点</td></tr>
           <tr><td>上游 api</td><td>仅 web：选一个后端后，<code>/api/</code> 会反代到它；不反代就选「不反代」</td></tr>
           <tr><td>操作</td><td>有域名时出现「复制」（站点地址，含端口）；每行有「发布」（发布代码，不含数据库）；api 行另有「数据库」组：<b>迁移 / 备份 / 导入 SQL</b>，只操作数据库；行尾 <b>✕</b> 移除</td></tr>
@@ -504,7 +504,7 @@
     <div class="callout warn">
       <p><b>导入会覆盖同名表。</b>拿不准先点「备份」，备份文件在服务器的 <code>/var/backups</code>。</p>
     </div>
-    <p>「建库」列选<strong>自动</strong>会建库（库名 = 项目名把 <code>-</code> 换成 <code>_</code>）；选<strong>不建</strong>则写 <code>DATABASE_ENABLED=false</code>，适合纯接口项目。改完点「应用更改」生效。</p>
+    <p>「建库」列选<strong>自动建库</strong>会在应用更改时建库（库名 = 项目名把 <code>-</code> 换成 <code>_</code>），已存在的库和数据不会动；选<strong>不建库</strong>则写 <code>DATABASE_ENABLED=false</code>，适合纯接口项目或自己连外部库。改完点「应用更改」生效。</p>
 
     <h3>nginx</h3>
     <p>配置页底部的「服务器 nginx 配置」→ <strong>查看</strong>：先跑 <code>nginx -t</code>，再只读展示 <code>/etc/nginx/conf.d/deploy-&lt;项目&gt;.conf</code>（每个项目一个）。这些文件每次「应用更改」都会整体重写，<strong>不要手改</strong>。</p>

@@ -652,7 +652,7 @@ function gridRowOf(row, idx) {
   if (row.type === 'api') {
     const dbSel = document.createElement('select');
     dbSel.dataset.field = 'db';
-    for (const [v, label] of [['mysql', '自动'], ['none', '不建']]) {
+    for (const [v, label] of [['mysql', '自动建库'], ['none', '不建库']]) {
       const o = document.createElement('option');
       o.value = v;
       o.textContent = label;
@@ -665,6 +665,11 @@ function gridRowOf(row, idx) {
       dbSel.appendChild(o);
     }
     dbSel.value = row.db;
+    dbSel.title = row.db === 'none'
+      ? '不建库：面板不创建这个项目的数据库，适合纯接口项目或自己连外部库'
+      : row.db === 'mysql'
+        ? '自动建库：应用更改时创建 MySQL 库（库名 = 项目名，- 换成 _），并写入 .env；已有库和数据不会动'
+        : `建库：库名 ${row.db}；已有库和数据不会动`;
     tdDb.appendChild(dbSel);
   } else {
     const dash = document.createElement('span');

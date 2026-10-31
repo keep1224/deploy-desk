@@ -928,7 +928,7 @@ body.log-hidden .console-wrap { display: none; }
 /* ── 项目清单：单元格直接编辑 ──────────────────────────────── */
 /* 8 列可编辑布局比容器宽时宁可横向滚动，也不压缩列宽（否则操作列按钮竖排撑高行）；
    项目列和操作列 sticky，滚动时两边始终可见 */
-.proj-tbl { table-layout: fixed; min-width: 1132px; }
+.proj-tbl { table-layout: fixed; min-width: 1152px; }
 .proj-tbl .col-actions { width: 320px; }
 .proj-tbl td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
 .proj-tbl .c-type, .proj-tbl .c-port, .proj-tbl .c-db, .proj-tbl .c-st { text-align: center; }
@@ -959,7 +959,7 @@ body.log-hidden .console-wrap { display: none; }
 .proj-tbl .c-port { width: 70px; }
 .proj-tbl .c-domain { width: 196px; }
 .proj-tbl .c-api { width: 144px; }
-.proj-tbl .c-db { width: 84px; }
+.proj-tbl .c-db { width: 104px; }
 .proj-tbl .c-st { width: 96px; }
 .proj-tbl td input[data-field],
 .proj-tbl td select[data-field] {
