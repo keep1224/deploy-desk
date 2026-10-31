@@ -344,7 +344,7 @@
     <div class="step">
       <span class="num">2</span>
       <h3>填项目表，应用更改</h3>
-      <p>切到 <strong>项目</strong>，点表格上方的「<strong>+ 新增项目</strong>」，会在表尾追加一行，直接在单元格里填。最少只需<b>名称</b>和<b>类型</b>；<b>前端必须填域名或 IP</b>，后端可以留空。</p>
+      <p>切到 <strong>项目</strong>，点表格上方的「<strong>+ 新增项目</strong>」，会在表尾追加一行，直接在单元格里填。最少只需<b>名称</b>和<b>类型</b>——域名不用管，前端行的站点地址默认就是当前连接的主机 IP（状态列那行小字，点开可改）。</p>
       <p>填完点右上角 <strong>应用更改</strong>。第一次会弹窗确认，然后上传内置部署脚本和清单到 <code>/opt/deploy</code>，执行 <code>apply.sh</code>：</p>
       <ul>
         <li><b>后端</b>：系统用户、<code>/opt/apps/&lt;项目&gt;</code>、裸仓库 <code>/opt/git/&lt;项目&gt;.git</code>、systemd 服务 <code>nest-&lt;项目&gt;</code>、<code>.env</code>；「建库」为自动时还会创建 MySQL 库和账号。</li>
@@ -409,11 +409,10 @@
           <tr><td>项目</td><td>名称同时用作目录名、系统用户、服务名和库名（<code>-</code> 换成 <code>_</code>）。3–31 位，小写字母开头，只能含小写字母、数字和 <code>-</code></td></tr>
           <tr><td>类型</td><td><span class="tag mute">web</span> 静态前端，由 nginx 提供服务；<span class="tag mute">api</span> Node 后端，跑 systemd 服务</td></tr>
           <tr><td>端口</td><td><b>api</b>：后端自己监听的端口，留空从 3001 起自动分配，只绑 <code>127.0.0.1</code>；<b>web</b>：nginx 对外的 listen 端口，留空就是 80。整张表的端口不能重复</td></tr>
-          <tr><td>状态</td><td>见下方状态表；api 行的小字还会显示表数、大小或缺库</td></tr>
+          <tr><td>状态</td><td>见下方状态表；api 行的小字显示表数、大小或缺库；web 行的小字是站点地址（nginx <code>server_name</code>），<b>点它就能改</b>——不填就用当前连接的主机 IP</td></tr>
           <tr><td>建库</td><td>仅 api：<b>自动建库</b>（库名=项目名），<b>不建库</b>用于纯接口项目；web 恒为 <code>—</code></td></tr>
-          <tr><td>域名</td><td>只写主机名或 IP，例如 <code>example.com</code>，不要带 <code>http://</code>。web 必填；api 可空，填了会额外生成 80 端口反代站点</td></tr>
           <tr><td>上游 api</td><td>仅 web：选一个后端后，<code>/api/</code> 会反代到它；不反代就选「不反代」</td></tr>
-          <tr><td>操作</td><td>有域名时出现「复制」（站点地址，含端口）；每行有「发布」（发布代码，不含数据库）；api 行另有「数据库」组：<b>迁移 / 备份 / 导入 SQL</b>，只操作数据库；行尾 <b>✕</b> 移除</td></tr>
+          <tr><td>操作</td><td>web 行有「复制」（站点地址，含端口）；每行有「发布」（发布代码，不含数据库）；api 行另有「数据库」组：<b>迁移 / 备份 / 导入 SQL</b>，只操作数据库；行尾 <b>✕</b> 移除</td></tr>
         </tbody>
       </table>
     </div>
@@ -437,7 +436,7 @@
     <p>配置有误时「应用更改」会被拦下。刚发布完状态没变化，点一下「刷新状态」。</p>
 
     <h3>一台服务器放多个前端</h3>
-    <p>服务器只有 IP 时，「域名」列都填同一个 IP，每个前端行写<strong>不同的显式端口</strong>（如 8080、8081），nginx 按 listen 端口区分站点；「复制」会自动带上端口。</p>
+    <p>服务器只有 IP 时什么都不用填：每个前端行的站点地址自动取连接的主机，只要给每行写<strong>不同的显式端口</strong>（如 8080、8081），nginx 按 listen 端口区分站点；「复制」会自动带上端口。真有域名时，点状态列那行小字填进去即可。</p>
 
     <h3>移除项目</h3>
     <p>点行尾 <strong>✕</strong> 先从清单移除。如果服务器上已经有这个项目，会再问一次是否连 systemd 服务、<code>/opt/apps</code>、裸仓库和网站目录一起删除；后端还会单独确认数据库（不可恢复，建议先「备份」）。取消就只删清单，服务器保持原样。nginx 站点要等下一次「应用更改」才下线。</p>
@@ -528,7 +527,7 @@
 
     <details>
       <summary>nginx 显示「通过，有告警」或 suspicious symbols</summary>
-      <p>多半是域名列写成了 <code>http://example.com</code>。nginx 的 <code>server_name</code> 只认主机名，改成 <code>example.com</code> 再「应用更改」。</p>
+      <p>多半是站点地址写成了 <code>http://example.com</code> 这类带路径的值。nginx 的 <code>server_name</code> 只认主机名，点状态列那行小字改成 <code>example.com</code> 再「应用更改」。</p>
     </details>
 
     <details>

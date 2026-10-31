@@ -698,6 +698,12 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 状态列里的站点地址输入框（原「域名」列）：比状态小字略大一点，仍然一行看完 */
+.proj-tbl .cell-domain {
+  height: 20px;
+  font-size: var(--fs-11);
+  text-align: center;
+}
 .proj-tbl tr.bad td { background: rgba(229, 100, 95, .05); }
 .proj-tbl tr.bad td:first-child { box-shadow: inset 2px 0 var(--err); }
 .proj-tbl tr.bad:hover td { background: rgba(229, 100, 95, .08); }
@@ -931,9 +937,9 @@ body.log-hidden .console-wrap { display: none; }
 }
 
 /* ── 项目清单：单元格直接编辑 ──────────────────────────────── */
-/* 8 列可编辑布局比容器宽时宁可横向滚动，也不压缩列宽（否则操作列按钮竖排撑高行）；
+/* 7 列可编辑布局比容器宽时宁可横向滚动，也不压缩列宽（否则操作列按钮竖排撑高行）；
    项目列和操作列 sticky，滚动时两边始终可见 */
-.proj-tbl { table-layout: fixed; min-width: 1152px; }
+.proj-tbl { table-layout: fixed; min-width: 1008px; }
 .proj-tbl .col-actions { width: 320px; }
 .proj-tbl td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
 .proj-tbl .c-type, .proj-tbl .c-port, .proj-tbl .c-db, .proj-tbl .c-st { text-align: center; }
@@ -962,10 +968,9 @@ body.log-hidden .console-wrap { display: none; }
 .proj-tbl .c-name { width: 116px; }
 .proj-tbl .c-type { width: 106px; }
 .proj-tbl .c-port { width: 70px; }
-.proj-tbl .c-domain { width: 196px; }
-.proj-tbl .c-api { width: 144px; }
+.proj-tbl .c-api { width: 132px; }
 .proj-tbl .c-db { width: 104px; }
-.proj-tbl .c-st { width: 96px; }
+.proj-tbl .c-st { width: 160px; }
 .proj-tbl td input[data-field],
 .proj-tbl td select[data-field] {
   width: 100%;

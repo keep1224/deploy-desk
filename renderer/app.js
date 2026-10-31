@@ -87,6 +87,7 @@ const CUSTOM_TARGET = '__custom__';
 // 后端发布的选择项由仓库本身决定，启动时先收下上次用过的值，
 // 等 git:inspect 读到真实远端/分支后再回填，避免被空下拉冲掉。
 const repoDirs = new Map(); // 项目名 → 本地仓库目录
+const distDirs = new Map(); // 项目名 → 本地 dist 目录
 let pushProjectName = '';
 let preferredRemote = '';
 let preferredBranch = '';
@@ -126,6 +127,20 @@ function webRemoteDir() {
   return webDirOf(sel.value);
 }
 
+// dist 目录按项目记：多个前端各自的构建产物不同，切项目时要跟着切
+function rememberDistDir() {
+  const name = $('#webTargetProject').value;
+  const dir = $('#distDir').value.trim();
+  if (!name || name === CUSTOM_TARGET || !dir) return;
+  distDirs.set(name, dir);
+  persistSettings({ distDirs: Object.fromEntries(distDirs) });
+}
+
+function useDistDirOf(name) {
+  const known = distDirs.get(name);
+  if (known !== undefined) $('#distDir').value = known;
+}
+
 function applySettings(s) {
   for (const [k, sel] of Object.entries(SETTING_FIELDS)) {
     if (typeof s[k] === 'string') $(sel).value = s[k];
@@ -136,6 +151,11 @@ function applySettings(s) {
   if (s.repoDirs && typeof s.repoDirs === 'object') {
     for (const [k, v] of Object.entries(s.repoDirs)) {
       if (typeof v === 'string') repoDirs.set(k, v);
+    }
+  }
+  if (s.distDirs && typeof s.distDirs === 'object') {
+    for (const [k, v] of Object.entries(s.distDirs)) {
+      if (typeof v === 'string') distDirs.set(k, v);
     }
   }
   if (typeof s.webClean === 'boolean') $('#webClean').checked = s.webClean;
@@ -155,8 +175,11 @@ for (const [k, sel] of Object.entries(SETTING_FIELDS)) {
 }
 $('#webClean').addEventListener('change', (e) => persistSettings({ webClean: e.target.checked }));
 $('#webTargetProject').addEventListener('change', () => {
-  $('#webTargetRow').hidden = $('#webTargetProject').value !== CUSTOM_TARGET;
+  const name = $('#webTargetProject').value;
+  useDistDirOf(name);
+  $('#webTargetRow').hidden = name !== CUSTOM_TARGET;
 });
+$('#distDir').addEventListener('change', rememberDistDir);
 
 // ── theme ───────────────────────────────────────────────────
 const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
@@ -475,8 +498,33 @@ function parseConf(text) {
 
 function syncProjects() {
   proj.rows = parseConf($('#confText').value);
+  normalizeWebDomains();
   renderProjects();
   $('#confDirty').hidden = $('#confText').value === proj.baseText;
+}
+
+// nginx 的 server_name 不能空着，而域名又不是一列了：载入时就把没写的
+// web 行补成当前连接的主机，清单和状态列显示的地址永远一致
+function normalizeWebDomains() {
+  const host = siteHostDefault();
+  if (!host) return;
+  const ta = $('#confText');
+  const lines = ta.value.split('\n');
+  let touched = false;
+  proj.rows.forEach((r, idx) => {
+    if (r.type !== 'web' || (r.domain && r.domain !== '-')) return;
+    const i = lineIndexAt(idx);
+    if (i < 0) return;
+    const next = rowToLine({ ...r, domain: host });
+    if (lines[i] !== next) {
+      lines[i] = next;
+      touched = true;
+    }
+  });
+  if (touched) {
+    ta.value = lines.join('\n');
+    proj.rows = parseConf(ta.value);
+  }
 }
 
 // 清单第 pos 个项目对应文本框的物理行号（跳过注释/空行/残行，与 parseConf 一致）
@@ -493,8 +541,20 @@ function lineIndexAt(pos) {
   return -1;
 }
 
+// 域名不再占一列：前端行的访问地址默认跟着当前连接的主机（多数服务器没有 DNS），
+// 真域名在状态列的地址上点开改
+function siteHostDefault() {
+  const p = state.profiles.find((x) => x.id === state.activeId);
+  return p ? String(p.host || '').trim() : '';
+}
+
+function domainOf(r) {
+  if (r.type === 'web' && (r.domain === '-' || !r.domain)) return siteHostDefault() || '-';
+  return String(r.domain);
+}
+
 function rowToLine(r) {
-  return `${String(r.name).padEnd(11)} ${String(r.type).padEnd(5)} ${String(r.port).padEnd(6)} ${String(r.domain).padEnd(19)} ${String(r.api).padEnd(11)} ${String(r.db)}`;
+  return `${String(r.name).padEnd(11)} ${String(r.type).padEnd(5)} ${String(r.port).padEnd(6)} ${domainOf(r).padEnd(19)} ${String(r.api).padEnd(11)} ${String(r.db)}`;
 }
 
 // 已部署的行改「名称/数据库」= 服务器上会新建项目，需确认后才能落盘
@@ -584,6 +644,18 @@ function statusCellOf(row) {
     }
     td.appendChild(sub);
   }
+  // 站点地址（原「域名」列）并进状态列：web 留空自动用当前连接的主机，api 留空 = 不单独建站
+  const host = siteHostDefault();
+  const domInp = document.createElement('input');
+  domInp.className = 'cell-domain';
+  domInp.dataset.field = 'domain';
+  domInp.value = row.domain === '-' ? '' : row.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  domInp.placeholder = row.type === 'web' ? (host || '站点地址') : '不单独建站';
+  domInp.spellcheck = false;
+  domInp.title = row.type === 'web'
+    ? `nginx server_name：留空 = 用当前连接的主机${host ? ` ${host}` : '（还没选连接）'}`
+    : '后端一般不用填：填了会额外生成一个 80 端口的反代站点，同时作为 CORS 允许的来源';
+  td.appendChild(domInp);
   return td;
 }
 
@@ -678,17 +750,6 @@ function gridRowOf(row, idx) {
     tdDb.appendChild(dash);
   }
   tr.appendChild(tdDb);
-
-  const tdDom = document.createElement('td');
-  tdDom.className = 'c-domain';
-  const domInp = document.createElement('input');
-  domInp.dataset.field = 'domain';
-  domInp.value = row.domain === '-' ? '' : row.domain;
-  domInp.placeholder = '域名或 IP，可留空';
-  domInp.spellcheck = false;
-  domInp.title = row.domain === '-' ? '' : row.domain;
-  tdDom.appendChild(domInp);
-  tr.appendChild(tdDom);
 
   const tdApi = document.createElement('td');
   tdApi.className = 'c-api';
@@ -925,6 +986,7 @@ async function uploadWeb(name, btn) {
     return;
   }
   const clean = $('#webClean').checked;
+  rememberDistDir(); // 目录可能只改了没失焦，发布前先落到该项目名下
   const ok = confirm(
     `${name ? `发布前端 ${name}？` : '上传到自定义目录？'}\n\n${localDir}\n→ ${remoteDir}${clean ? '\n\n上传前会清空目标目录' : ''}`,
   );
@@ -998,8 +1060,9 @@ function addGridRow() {
   const name = nextProjectName();
   const sep = ta.value && !ta.value.endsWith('\n') ? '\n' : '';
   // 模板列与 lastNewType 对应：web 不建库，api 建库
-  const tail = lastNewType === 'web' ? 'web   -      -                   -           none' : 'api   -      -                   -           mysql';
-  ta.value += `${sep}${name.padEnd(11)} ${tail}\n`;
+  const web = lastNewType === 'web';
+  const tpl = { name, type: web ? 'web' : 'api', port: '-', domain: '-', api: '-', db: web ? 'none' : 'mysql' };
+  ta.value += `${sep}${rowToLine(tpl)}\n`;
   syncProjects();
   const trs = document.querySelectorAll('#projTable tbody tr');
   const last = trs[trs.length - 1];
@@ -1317,7 +1380,8 @@ $('#projTable').addEventListener('change', (e) => {
     }
   }
   gridEdit(idx, field, el.value);
-  if (field === 'type') renderProjects(); // 互换上游/数据库单元格
+  // 类型要换列；域名清空后回填生效的主机地址，不能留个空框骗人
+  if (field === 'type' || field === 'domain') renderProjects();
 });
 // Enter：跳到下一行同列，最后一行则失焦（触发确认/落定）
 $('#projTable').addEventListener('keydown', (e) => {
@@ -1369,9 +1433,11 @@ async function openPub(type, projectName) {
     if (!repoInfo) await inspectRepo();
     else renderGitHint();
   } else if (projectName) {
+    rememberDistDir(); // 记的是切换前那个项目的目录
     syncWebTargets();
     $('#webTargetProject').value = projectName;
     $('#webTargetRow').hidden = true;
+    useDistDirOf(projectName);
   }
 }
 
@@ -1549,6 +1615,7 @@ $('#btnPickDist').addEventListener('click', async () => {
   if (!dir) return;
   $('#distDir').value = dir;
   persistSettings({ distDir: dir });
+  rememberDistDir();
 });
 
 $('#btnPush').addEventListener('click', async (e) => {

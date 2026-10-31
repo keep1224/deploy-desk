@@ -170,7 +170,7 @@ function countFiles(dir) {
 }
 
 // ── ipc: profiles ───────────────────────────────────────────
-const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webTargetProject', 'webClean', 'theme', 'logBar'];
+const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webTargetProject', 'webClean', 'theme', 'logBar', 'pushProject', 'repoDirs', 'distDirs'];
 
 ipcMain.handle('profile:list', () => {
   const store = readStore();
@@ -243,8 +243,10 @@ ipcMain.handle('profile:reveal', (_e, { id, field: fieldName }) => {
 ipcMain.handle('settings:save', (_e, payload) => {
   const store = readStore();
   for (const k of SETTING_KEYS) {
-    if (payload[k] === undefined) continue;
-    store[k] = typeof payload[k] === 'boolean' ? payload[k] : String(payload[k]);
+    const v = payload[k];
+    if (v === undefined) continue;
+    // 布尔和「项目名 → 目录」这类映射原样存，其余收成字符串
+    store[k] = typeof v === 'boolean' || typeof v === 'object' ? v : String(v);
   }
   writeStore(store);
   return { ok: true };
