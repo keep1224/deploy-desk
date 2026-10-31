@@ -289,7 +289,7 @@
       <figcaption><b>项目页</b>：左边切换页面，中间是当前任务，右边是执行过程日志</figcaption>
     </figure>
     <ul>
-      <li><strong>左侧菜单</strong>：按使用顺序排列的 <strong>配置 / 项目 / 发布</strong> 三页。</li>
+      <li><strong>左侧菜单</strong>：<strong>配置 / 项目</strong> 两页；发布不占页面——项目表每行的「发布」按钮会弹出发布窗口。</li>
       <li><strong>左下角</strong>：切换当前服务器连接；「管理连接」跳到配置页；<strong>?</strong> 打开本说明；齿轮打开设置。</li>
       <li><strong>右侧「执行过程」</strong>：所有命令、上传进度、错误都实时打在这里。出问题先看这里，再点「清空」重新来。</li>
     </ul>
@@ -335,15 +335,7 @@
     <div class="step">
       <span class="num">3</span>
       <h3>准备项目清单</h3>
-      <p>回到 <strong>项目</strong> 页，点开「原始配置 <code>projects.conf</code>」：</p>
-      <ul>
-        <li>文本框就是项目清单，从服务器下载、从本地加载、或直接改都行。</li>
-        <li>也可以在项目表底部点「+ 新增项目」，会追加一行模板。</li>
-      </ul>
-      <figure>
-        <img class="shot" src="img/06-rawconf.png" alt="项目页展开原始配置：操作按钮和 projects.conf 文本" />
-        <figcaption><b>原始配置</b>：<code>projects.conf</code> 文本；改完点右上角「应用更改」</figcaption>
-      </figure>
+      <p>回到 <strong>项目</strong> 页，点「<strong>+ 新增项目</strong>」：表格末尾会插入一行，直接在单元格里填名称、选类型，域名和端口都可以留空。要改哪行就在哪行改，不要了点行尾的 <strong>✕</strong> 移除。</p>
     </div>
 
     <div class="step">
@@ -365,24 +357,19 @@
       <h3>发布后端</h3>
       <p>服务器初始化后，本地仓库需要先加一次远程（在项目仓库目录执行，只做一次）：</p>
       <pre><code>git remote add deploy ssh://root@185.242.234.143:5035/opt/git/app-a-api.git</code></pre>
-      <p>然后在 <strong>发布</strong> 页选仓库目录，远端保持 <code>deploy</code>、分支按需要（默认 <code>master</code>），点 <strong>git push 发布</strong>。服务器收到推送后依次执行：安装依赖 → 构建 → 数据库迁移 → 重启服务 → 健康检查。</p>
+      <p>然后在项目表点该后端行的<strong>「发布」</strong>，弹窗里选仓库目录：<strong>远端</strong>和<strong>分支</strong>是从这个仓库里真实读出来的下拉，不是手填。默认选中 URL 指向 <code>/opt/git/&lt;项目&gt;.git</code> 的那个远端，分支默认选服务器钩子会部署的那个；如果这个仓库还没有远端，弹窗下方会直接把上面那条 <code>git remote add</code> 命令写给你复制。确认后点 <strong>git push 发布</strong>。服务器收到推送后依次执行：安装依赖 → 构建 → 数据库迁移 → 重启服务 → 健康检查。</p>
+      <p>远端指向的不是这个项目的裸仓库、或者推的分支不是钩子监听的分支时，下方提示会标出来——这种推送会成功，但服务器什么都不做。</p>
       <p>任何一步失败，服务会继续跑上一个版本。右侧日志会显示卡在哪一步。</p>
     </div>
 
     <div class="step">
       <span class="num">6</span>
       <h3>发布前端</h3>
-      <p>先本地构建出 <code>dist/</code>，然后两种方式任选：</p>
-      <ul>
-        <li><strong>项目表一键发布</strong>：在前端行点「发前端」。目标目录自动是 <code>/var/www/&lt;项目名&gt;</code>，源目录用发布页里配的 dist 目录，清空选项也用发布页的勾选。上传前会弹确认。</li>
-        <li><strong>发布页手动上传</strong>：填 <code>dist</code> 目录和服务器目标目录（默认 <code>/var/www/app-a-web</code>），点「上传」。</li>
-      </ul>
-      <figure>
-        <img class="shot" src="img/03-publish.png" alt="发布页：左侧发布后端，右侧发布前端" />
-        <figcaption><b>发布页</b>：后端 git push，前端 SFTP；右边的 dist 目录供项目表「发前端」复用</figcaption>
-      </figure>
+      <p>先本地构建出 <code>dist/</code>，然后在项目表点该前端行的<strong>「发布」</strong>：弹窗会切到「前端 · dist 上传」并选中这个项目。选好 dist 目录、确认「发布到」（固定是 <code>/var/www/&lt;项目名&gt;</code>，和 nginx 的 root 一致），点「上传」，上传前会弹确认。</p>
+      <p>弹窗内容跟随行的类型：后端行出现 git push，前端行出现 dist 上传——想发布哪个项目，就点哪一行的「发布」。</p>
+      <p><strong>一台只有 IP 的服务器放多个前端</strong>：域名列都填同一个 IP，但每个前端行写<strong>不同的显式端口</strong>（比如 8080、8081），nginx 按 listen 端口区分站点，「复制」按钮会自动带上端口（<code>http://185.242.234.143:8081</code>）。</p>
       <div class="callout warn">
-        <p><b>「上传前清空目标目录」会先 <code>rm -rf</code> 目标目录再上传。</b>确认 dist 目录选对了再勾选；不确定就先取消勾选。</p>
+        <p><b>「上传前清空目标目录」会先清掉远端目录再上传（先传暂存目录、再原子切换，切换前旧站点仍可访问）。</b>确认 dist 目录选对了再勾选；不确定就先取消勾选。</p>
       </div>
     </div>
   </section>
@@ -398,14 +385,14 @@
           <tr><td>入口</td><td>域名或本机端口；前端行如果绑定了后端，会显示「→ 后端名」</td></tr>
           <tr><td>数据库</td><td>表数量与大小；<span class="tag mute">未启用</span> 表示 <code>db=none</code>，<span class="tag bad">缺失</span> 表示库还没建</td></tr>
           <tr><td>状态</td><td>后端：<span class="tag ok">已部署</span> / <span class="tag warn">待初始化</span>；前端：<span class="tag ok">已发布</span> / <span class="tag warn">未发布</span></td></tr>
-          <tr><td>操作</td><td>「打开」用域名打开站点；后端行有「迁移 / 备份 / 导入」；前端行有「发前端」</td></tr>
+          <tr><td>操作</td><td>「复制」复制站点地址（含端口）；每行都有「发布」（弹窗）；后端行另有「迁移 / 备份 / 导入」；行尾 ✕ 移除</td></tr>
         </tbody>
       </table>
     </div>
     <p>状态是根据服务器上的实际目录判断的：后端看 <code>/opt/apps/&lt;name&gt;</code>，前端看 <code>/var/www/&lt;name&gt;</code>。所以刚发布完如果没变，点一下「刷新状态」。</p>
     <p>如果某行配置写错了（项目名不合法、端口或域名重复、web 行指向了不存在的后端等），整行会标红，鼠标悬停能看到原因，「应用更改」也会被拦下。</p>
     <h3>查看服务器 nginx 配置</h3>
-    <p>项目页底部有「服务器 nginx 配置」卡片，点「查看」会先跑 <code>nginx -t</code>，再只读展示 <code>/etc/nginx/conf.d/projects.conf</code>。这个文件由「应用更改」生成，日常不要手改。</p>
+    <p><strong>配置</strong>页下方有「服务器 nginx 配置」卡片（服务器状态旁边），点「查看」会先跑 <code>nginx -t</code>，再只读展示 <code>/etc/nginx/conf.d/deploy-&lt;项目&gt;.conf</code>。这些文件由「应用更改」生成（每个项目一个），日常不要手改。</p>
     <figure>
       <img class="shot" src="img/05-nginx.png" alt="nginx 配置查看弹窗：nginx -t 结果与配置内容" />
       <figcaption><b>nginx 查看器</b>：顶部是 <code>nginx -t</code> 结果，下面是当前生成的站点配置</figcaption>
@@ -415,11 +402,27 @@
   <section id="publish">
     <h2 class="sec"><span class="sn">5</span>日常发布</h2>
     <h3>后端</h3>
-    <p>改完代码、提交后，在发布页点「git push 发布」。只需要填仓库目录；远端和分支会记住。发布成功后项目表的数据库列会更新。</p>
+    <p>改完代码、提交后，在后端行点「发布」→ 弹窗里点「git push 发布」。只需要选仓库目录，远端和分支是从仓库里读出来的，每个项目的仓库目录还会记住，切项目自动带出。发布成功后项目表的数据库列会更新。</p>
     <h3>前端</h3>
-    <p>本地 <code>pnpm build</code> 出新的 <code>dist/</code>，在项目表点「发前端」，确认源目录和目标目录，等日志显示「已上传 N 个文件」。发布成功后状态会变成「已发布」。</p>
+    <p>本地 <code>pnpm build</code> 出新的 <code>dist/</code>，在前端行点「发布」，确认 dist 目录和目标目录，等日志显示「完成 N 个文件」。之后面板会在服务器本机请求一次该项目的端口（日志里的「站点自检」行），返回 200 才算真的在跑；没返回 200 会标红并提示去项目表核对端口列、点「应用更改」。</p>
     <h3>查看站点</h3>
-    <p>项目配了域名时，操作列会有「打开」，会用默认浏览器打开。后端项目通常不配域名，只监听 <code>127.0.0.1</code>，由前端 nginx 把 <code>/api/</code> 反代过去。</p>
+    <p>项目配了域名时，操作列会有「复制」，一键复制站点地址（含端口）。后端项目通常不配域名，只监听 <code>127.0.0.1</code>，由前端 nginx 把 <code>/api/</code> 反代过去。</p>
+    <h3>想改 nginx：用 extras 片段</h3>
+    <p>项目表那 6 列覆盖不到的东西（gzip、缓存头、额外的 location、再开一个端口、443 等），不要去改 <code>deploy-&lt;项目&gt;.conf</code>——它每次「应用更改」都会被整体重写。改成在服务器上放一个同名片段：</p>
+    <pre><code>/opt/deploy/snippets/&lt;项目名&gt;.conf</code></pre>
+    <p>只要这个文件存在，<code>apply.sh</code> 就会把它 <code>include</code> 进该项目的 <code>server { }</code> 块末尾，并且<strong>永远不会覆盖它</strong>。写完后执行一次「应用更改」就会带上，日志里会多一行 <code>+ extras: ...</code>。</p>
+    <pre><code># /opt/deploy/snippets/app-a-web.conf
+gzip on;
+gzip_types text/css application/javascript application/json;
+
+location /assets/ {
+    expires 30d;
+    add_header Cache-Control "public";
+}</code></pre>
+    <div class="callout warn">
+      <p>片段语法就是 nginx 指令，写错会让 <code>nginx -t</code> 失败。这时 apply 会自动回滚本次改动，站点保持原样，不会整站挂掉。</p>
+    </div>
+    <p>如果你要的是<strong>完全自己掌控</strong>（连生成的 <code>server</code> 块都不要），直接在 <code>/etc/nginx/conf.d/</code> 下另写一个文件名不以 <code>deploy-</code> 开头的配置，apply 永远不会碰它。</p>
   </section>
 
   <section id="database">
@@ -475,7 +478,7 @@
 
     <details>
       <summary>前端发布成功，打开还是旧页面 / 404</summary>
-      <p>确认上传的是 <code>dist</code> 目录里的内容（里面应该有 <code>index.html</code>），而不是项目根目录。还不行就勾选「上传前清空目标目录」重传一次，再刷新浏览器缓存。</p>
+      <p>先看日志里那行「站点自检 http://127.0.0.1:&lt;端口&gt;/ → …」：文件传上去了，但 nginx 没返回 200，多半是这一行没在清单里、或端口列不对，改完点「应用更改」再发一次。再确认上传的是 <code>dist</code> 目录里的内容（里面应该有 <code>index.html</code>），而不是项目根目录。还不行就勾选「上传前清空目标目录」重传一次，再刷新浏览器缓存。</p>
     </details>
 
     <details>
@@ -510,7 +513,7 @@
       <li>面板只跑在自己电脑上，不监听公网端口；服务器上只多了部署脚本和 systemd 服务。</li>
       <li>连接密码/私钥口令用系统凭据加密，<code>projects.conf</code> 里不存密码。</li>
       <li>每个后端服务的 <code>.env</code> 权限是 <code>600</code>，数据库只监听本机，应用用独立系统用户运行。</li>
-      <li>2G 内存的服务器默认给每个后端 <code>MemoryMax=384M</code>，后端数量建议 2–3 个以内。</li>
+      <li>2G 内存的服务器默认给每个后端 <code>MemoryMax=384M</code>，运行态堆上限（<code>NODE_OPTIONS</code>）默认 256M，后端数量建议 2–3 个以内。</li>
       <li>「应用更改」会以 root 身份在服务器执行脚本，只在你明确修改配置后点。</li>
       <li>发布前建议先提交本地代码；推送后服务器会自动构建和重启。</li>
     </ul>

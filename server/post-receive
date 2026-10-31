@@ -22,6 +22,7 @@ flock -n 9 || { echo 'another deploy is running; push again later' >&2; exit 1; 
 trap 'echo "!! deploy failed — the service still runs the previous build" >&2' ERR
 
 deploy=no
+# shellcheck disable=SC2034  # _old 有意丢弃
 while read -r _old new ref; do
   if [[ $ref == "refs/heads/$BRANCH" && $new != 0000000000000000000000000000000000000000 ]]; then
     deploy=yes

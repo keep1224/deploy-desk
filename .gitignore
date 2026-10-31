@@ -4,3 +4,4 @@ dist/
 *.log
 .userdata/
 .electron-cache/
+.builder-cache/

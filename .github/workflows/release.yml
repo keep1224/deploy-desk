@@ -9,6 +9,20 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash syntax
+        run: |
+          for f in server/*.sh server/post-receive; do
+            bash -n "$f"
+          done
+
+      - name: shellcheck
+        run: shellcheck -S warning server/apply.sh server/add-project.sh server/db.sh server/post-receive
+
   build:
     strategy:
       fail-fast: false

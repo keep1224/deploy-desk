@@ -42,6 +42,10 @@ SERVICE_PREFIX=${SERVICE_PREFIX:-nest-}
 SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
 MEM_MAX=${MEM_MAX:-384M}
 MIN_PORT=${MIN_PORT:-3001}
+# 运行时服务堆上限（MB）。默认 256M：给 384M 的 cgroup MemoryMax 留出非堆开销
+# 余量，避免 Node 在触顶 OOM 前被 systemd 先杀掉。这只写进 .env 供运行态使用；
+# 构建阶段（post-receive 里的 pnpm build）另用更大的堆，互不影响。
+RUNTIME_HEAP_MB=${RUNTIME_HEAP_MB:-256}
 
 [[ $(id -u) -eq 0 ]] || { echo 'run as root' >&2; exit 1; }
 [[ $NAME =~ ^[a-z][a-z0-9-]{2,30}$ ]] || { echo "invalid name: $NAME" >&2; exit 1; }
@@ -143,6 +147,8 @@ CORS_ORIGINS=$CORS
 BODY_LIMIT=1mb
 SWAGGER_ENABLED=true
 SWAGGER_PATH=api-docs
+# 运行时堆上限：小于 systemd 的 MemoryMax(${MEM_MAX})，避免 cgroup OOM 先于 JS 堆 OOM
+NODE_OPTIONS=--max-old-space-size=${RUNTIME_HEAP_MB}
 JWT_SECRET="$(openssl rand -hex 32)"
 JWT_EXPIRES_IN=7d
 EOF

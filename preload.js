@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('profile:list'),
     save: (payload) => ipcRenderer.invoke('profile:save', payload),
     remove: (id) => ipcRenderer.invoke('profile:delete', id),
+    reveal: (payload) => ipcRenderer.invoke('profile:reveal', payload),
   },
   settings: {
     save: (payload) => ipcRenderer.invoke('settings:save', payload),
@@ -32,11 +33,16 @@ contextBridge.exposeInMainWorld('api', {
   },
   deploy: {
     push: (payload) => ipcRenderer.invoke('deploy:push', payload),
+    inspect: (repoDir) => ipcRenderer.invoke('git:inspect', repoDir),
   },
   web: {
     upload: (payload) => ipcRenderer.invoke('web:upload', payload),
   },
+  project: {
+    remove: (payload) => ipcRenderer.invoke('project:remove', payload),
+  },
   pickDir: () => ipcRenderer.invoke('dialog:pickDir'),
+  clip: { write: (text) => ipcRenderer.invoke('clip:write', text) },
   app: {
     info: () => ipcRenderer.invoke('app:info'),
   },
@@ -48,7 +54,6 @@ contextBridge.exposeInMainWorld('api', {
   guide: {
     open: () => ipcRenderer.invoke('guide:open'),
   },
-  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   onLog: (fn) => ipcRenderer.on('log', (_e, msg) => fn(msg)),
   onUpdate: (fn) => ipcRenderer.on('update', (_e, msg) => fn(msg)),
 });

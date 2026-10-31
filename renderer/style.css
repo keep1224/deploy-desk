@@ -116,6 +116,9 @@ html, body {
 body {
   display: grid;
   grid-template-columns: clamp(184px, 15vw, 216px) minmax(0, 1fr) clamp(380px, 30vw, 540px);
+  /* 行高钉在视口内（隐式行默认 auto 会随日志内容撑高，
+     overflow:hidden 下超出的内容被直接裁掉、永远不会滚动） */
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
 }
 
@@ -671,11 +674,6 @@ textarea {
 .table-scroll { overflow-x: auto; }
 
 .proj-tbl { table-layout: fixed; }
-.proj-tbl th:nth-child(1) { width: 25%; }
-.proj-tbl th:nth-child(2) { width: 22%; }
-.proj-tbl th:nth-child(3) { width: 12%; }
-.proj-tbl th:nth-child(4) { width: 12%; }
-.proj-tbl th:nth-child(5) { width: 29%; }
 
 .proj-tbl th:first-child,
 .proj-tbl td:first-child { padding-left: var(--card-pad); }
@@ -843,6 +841,7 @@ textarea {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--console-bg);
   border-left: 1px solid var(--line);
 }
@@ -922,3 +921,79 @@ textarea {
   border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover { background-color: var(--scroll-thumb-hover); }
+
+/* ── 日志面板收起：两栏布局，表格占满整行 ──────────────────── */
+body.log-hidden { grid-template-columns: clamp(184px, 15vw, 216px) minmax(0, 1fr); }
+body.log-hidden .console-wrap { display: none; }
+#btnLogShow { position: fixed; right: 14px; bottom: 14px; z-index: 25; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+
+/* ── 项目清单：单元格直接编辑 ──────────────────────────────── */
+/* 8 列可编辑布局比容器宽时宁可横向滚动，也不压缩列宽（否则操作列按钮竖排撑高行） */
+.proj-tbl { table-layout: fixed; min-width: 1134px; }
+.proj-tbl .col-actions { width: 264px; }
+.proj-tbl td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
+.proj-tbl .c-type, .proj-tbl .c-port, .proj-tbl .c-db, .proj-tbl .c-st { text-align: center; }
+.proj-tbl .c-type select, .proj-tbl .c-port input, .proj-tbl .c-db select { text-align: center; }
+.proj-tbl .actions { text-align: right; white-space: nowrap; }
+.proj-tbl .c-name { width: 128px; }
+.proj-tbl .c-type { width: 106px; }
+.proj-tbl .c-port { width: 72px; }
+.proj-tbl .c-domain { min-width: 210px; }
+.proj-tbl .c-api { width: 150px; }
+.proj-tbl .c-db { width: 100px; }
+.proj-tbl .c-st { width: 100px; }
+.proj-tbl td input[data-field],
+.proj-tbl td select[data-field] {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  font-size: var(--fs-12);
+  font-family: var(--mono);
+  background: transparent;
+  border-color: transparent;
+}
+.proj-tbl td select[data-field] { font-family: inherit; }
+.proj-tbl td input[data-field]:hover,
+.proj-tbl td select[data-field]:hover { border-color: var(--line); }
+.proj-tbl td input[data-field]:focus,
+.proj-tbl td select[data-field]:focus {
+  border-color: var(--accent);
+  background: var(--input-bg);
+  box-shadow: none;
+}
+.proj-tbl td input.cell-bad { border-color: var(--err); }
+.proj-tbl .row-del { padding: 0 7px; color: var(--text-3); }
+.proj-tbl .row-del:hover { color: var(--err); }
+.proj-tbl td.actions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+
+/* ── nginx 查看器：就地展开，不再用弹窗 ───────────────────── */
+#nginxBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px var(--card-pad);
+  border-top: 1px solid var(--line-soft);
+}
+#nginxBox .cfg-code { max-height: 420px; margin: 0; }
+#nginxBox[hidden] { display: none; }
+
+/* ── publish modal ────────────────────────────────────────── */
+/* 内容比 nginx 查看器少，高度收内容，不留大片空白 */
+.pub-card {
+  width: min(620px, 100%);
+  height: auto;
+  max-height: min(660px, 100%);
+}
+
+.pub-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-4) 16px 16px;
+}
+.pub-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.pub-pane .hint { margin: 0; }

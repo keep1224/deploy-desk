@@ -28,14 +28,6 @@
           </svg>
           <span>项目</span>
         </button>
-        <button class="nav-item" data-tab="publish">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 15V4" />
-            <path d="M7.5 8.5L12 4l4.5 4.5" />
-            <path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
-          </svg>
-          <span>发布</span>
-        </button>
       </nav>
 
       <div class="side-foot">
@@ -90,7 +82,10 @@
               <thead>
                 <tr>
                   <th>项目</th>
-                  <th>入口</th>
+                  <th>类型</th>
+                  <th>端口</th>
+                  <th>域名</th>
+                  <th>上游 api</th>
                   <th>数据库</th>
                   <th>状态</th>
                   <th class="col-actions">操作</th>
@@ -101,46 +96,12 @@
           </div>
           <div class="table-foot">
             <button id="btnAddProject" class="btn ghost">+ 新增项目</button>
-            <span class="hint">在配置末尾追加一行模板，改完点「应用更改」</span>
+            <span class="hint">直接在表格里改，改完点「应用更改」同步到服务器</span>
           </div>
         </section>
 
-        <section class="card">
-          <button type="button" class="section-toggle" id="btnToggleConf">
-            <span class="caret">▸</span>
-            <span>原始配置 <code>projects.conf</code></span>
-            <span id="confPathHint" class="hint"></span>
-          </button>
+        <textarea id="confText" hidden></textarea>
 
-          <div id="confBox" hidden>
-            <div class="row actions">
-              <button id="btnLoadLocalConf" class="btn">从本地文件加载</button>
-              <button id="btnDownloadConf" class="btn">从服务器下载</button>
-              <button id="btnSaveLocalConf" class="btn">另存为本地</button>
-            </div>
-
-            <textarea id="confText" spellcheck="false" rows="12" placeholder="app-a-web   web   -      app-a.example.com   app-a-api   none
-app-a-api   api   3001   -                   -           mysql"></textarea>
-
-            <p class="hint">
-              列顺序：名称 · 类型 · 端口 · 域名 · 上游 api · db。db 写 <code>mysql</code> 建库（库名为项目名把 - 换成 _）、
-              写 <code>none</code> 不建库、也可直接写库名。应用会执行 <code>/opt/deploy/apply.sh</code>，幂等。
-            </p>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="nginx-line">
-            <div class="nginx-meta">
-              <div class="nginx-title">服务器 nginx 配置</div>
-              <div class="nginx-path">/etc/nginx/conf.d/projects.conf</div>
-            </div>
-            <div class="nginx-side">
-              <span id="nginxState" class="hint">未读取</span>
-              <button id="btnOpenNginx" class="btn">查看</button>
-            </div>
-          </div>
-        </section>
       </section>
 
       <section class="panel" id="tab-config" hidden>
@@ -157,7 +118,7 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
             <form id="profileForm" class="form">
               <label>名称<input name="name" placeholder="生产服务器" /></label>
               <div class="row">
-                <label class="grow">主机<input name="host" placeholder="185.242.234.143" required /></label>
+                <label class="grow">主机<input name="host" placeholder="服务器 IP，如 203.0.113.10" required /></label>
                 <label class="port-field">端口<input name="port" value="22" /></label>
               </div>
               <div class="row">
@@ -209,60 +170,40 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
               <dt>项目目录</dt><dd id="st-apps">—</dd>
               <dt>bare 仓库</dt><dd id="st-repos">—</dd>
             </dl>
+            <p id="stHint" class="hint warn" hidden></p>
           </section>
         </div>
-      </section>
 
-      <section class="panel" id="tab-publish" hidden>
-        <header class="page-head">
-          <div>
-            <h1>发布</h1>
-            <p class="page-sub">后端走 git push 由服务器钩子构建，前端用 SFTP 覆盖静态目录</p>
+        <section class="card">
+          <div class="nginx-line">
+            <div class="nginx-meta">
+              <div class="nginx-title">服务器 nginx 配置</div>
+              <div class="nginx-path">/etc/nginx/conf.d/deploy-&lt;项目&gt;.conf · 每次应用都会重写</div>
+            </div>
+            <div class="nginx-side">
+              <span id="nginxState" class="hint">未读取</span>
+              <button id="btnOpenNginx" class="btn">查看</button>
+            </div>
           </div>
-        </header>
-
-        <div class="split">
-          <section class="card">
-            <h2>发布后端</h2>
-            <label>仓库目录
-              <div class="row">
-                <input id="repoDir" class="grow" placeholder="D:\code\my-api" />
-                <button id="btnPickRepo" class="btn narrow-btn">选择</button>
-              </div>
-            </label>
-            <div class="row">
-              <label class="grow">远端<input id="gitRemote" value="deploy" /></label>
-              <label class="grow">分支<input id="gitBranch" value="master" /></label>
-            </div>
+          <div id="nginxBox" hidden>
             <div class="row actions">
-              <button id="btnPush" class="btn primary">git push 发布</button>
+              <button id="btnLoadNginx" class="btn ghost tiny">重新读取</button>
             </div>
-            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart。面板只确认 git 推送成功，构建结果看日志里的 remote: 输出。</p>
-          </section>
-
-          <section class="card">
-            <h2>发布前端</h2>
-            <label>dist 目录
-              <div class="row">
-                <input id="distDir" class="grow" placeholder="D:\code\my-web\dist" />
-                <button id="btnPickDist" class="btn narrow-btn">选择</button>
-              </div>
-            </label>
-            <label>服务器目标目录<input id="webTarget" value="/var/www/app-a-web" /></label>
-            <label class="check"><input id="webClean" type="checkbox" checked /> 上传前清空目标目录</label>
-            <div class="row actions">
-              <button id="btnUpload" class="btn primary">上传</button>
-            </div>
-            <p class="hint">项目表里的前端项目点「发前端」会直接传到 <span class="mono">/var/www/&lt;项目名&gt;</span>，用这里的 dist 目录和清空选项。</p>
-          </section>
-        </div>
+            <div id="nginxTest" class="cfg-status"></div>
+            <pre id="nginxConf" class="cfg-code"></pre>
+          </div>
+        </section>
       </section>
+
     </main>
 
     <aside class="console-wrap">
       <div class="console-head">
         <span class="console-title"><span class="live-dot"></span>执行过程</span>
-        <button id="btnClear" class="btn ghost tiny">清空</button>
+        <span class="card-tools">
+          <button id="btnClear" class="btn ghost tiny">清空</button>
+          <button id="btnLogHide" class="btn ghost tiny" title="收起日志面板（表格将占满整行）">»</button>
+        </span>
       </div>
       <pre id="console" class="console"></pre>
     </aside>
@@ -296,23 +237,61 @@ app-a-api   api   3001   -                   -           mysql"></textarea>
       <p class="hint">Windows 安装版和 Linux AppImage 可以直接更新；便携版、macOS 未签名版请到 Releases 下载。</p>
     </div>
 
-    <div id="nginxModal" class="modal" hidden>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nginxModalTitle">
+    <div id="pubModal" class="modal" hidden>
+      <div class="modal-card pub-card" role="dialog" aria-modal="true" aria-labelledby="pubTitle">
         <header class="modal-head">
           <div class="nginx-meta">
-            <h2 id="nginxModalTitle">服务器 nginx 配置</h2>
-            <div class="nginx-path">/etc/nginx/conf.d/projects.conf · 只读，由「应用更改」生成</div>
+            <h2 id="pubTitle">发布</h2>
+            <div class="nginx-path">发布方式跟随行的类型：后端行 git push · 前端行 dist 上传</div>
           </div>
           <div class="card-tools">
-            <button id="btnLoadNginx" class="btn ghost tiny">重新读取</button>
-            <button id="btnCloseNginx" class="btn tiny">关闭</button>
+            <button id="btnClosePub" class="btn tiny">关闭</button>
           </div>
         </header>
-        <div id="nginxTest" class="cfg-status"></div>
-        <pre id="nginxConf" class="cfg-code"></pre>
+        <div class="pub-body">
+          <section id="pubBackend" class="pub-pane" hidden>
+            <label>项目
+              <select id="pushProject"></select>
+            </label>
+            <label>仓库目录
+              <div class="row">
+                <input id="repoDir" class="grow" placeholder="D:\code\my-api" />
+                <button id="btnPickRepo" class="btn narrow-btn">选择</button>
+              </div>
+            </label>
+            <div class="row">
+              <label class="grow">远端<select id="gitRemote"></select></label>
+              <label class="grow">分支<select id="gitBranch"></select></label>
+            </div>
+            <p class="hint" id="gitHint"></p>
+            <div class="row actions">
+              <button id="btnPush" class="btn primary">git push 发布</button>
+            </div>
+            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart。面板只确认 git 推送成功，构建结果看右侧日志里的 remote: 输出。</p>
+          </section>
+          <section id="pubFrontend" class="pub-pane" hidden>
+            <label>dist 目录
+              <div class="row">
+                <input id="distDir" class="grow" placeholder="D:\code\my-web\dist" />
+                <button id="btnPickDist" class="btn narrow-btn">选择</button>
+              </div>
+            </label>
+            <label>发布到
+              <select id="webTargetProject"></select>
+            </label>
+            <label id="webTargetRow" hidden>自定义目标目录<input id="webTarget" value="/var/www/app-a-web" /></label>
+            <label class="check"><input id="webClean" type="checkbox" checked /> 上传前清空目标目录</label>
+            <div class="row actions">
+              <button id="btnUpload" class="btn primary">上传</button>
+            </div>
+            <p class="hint">选了项目就传到 <span class="mono">/var/www/&lt;项目名&gt;</span>，和 nginx 的 <span class="mono">root</span> 一定一致。只有服务器上存在不在项目表里的站点时才用「自定义路径」。</p>
+          </section>
+        </div>
       </div>
     </div>
 
+
+    <button id="btnLogShow" class="btn ghost tiny" hidden>« 日志</button>
     <script src="app.js"></script>
   </body>
 </html>

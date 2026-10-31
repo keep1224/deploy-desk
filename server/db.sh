@@ -21,15 +21,24 @@ env_of() {
 
 # load <app> -> DB_USER DB_PASS DB_HOST DB_PORT DB_NAME
 load() {
-  local app=$1 url rest hostport
+  local app=$1 url rest hostport nats
   [[ -f $APPS_DIR/$app/.env ]] || { echo "$app: 没有 .env" >&2; return 1; }
   url=$(env_of "$app" DATABASE_URL)
   [[ -n $url ]] || { echo "$app: DATABASE_URL 未配置" >&2; return 1; }
   rest=${url#mysql://}
+  [[ $rest != "$url" ]] || { echo "$app: DATABASE_URL 需要 mysql:// 开头" >&2; return 1; }
   if [[ $rest == *@* ]]; then
-    DB_USER=${rest%%:*}
-    DB_PASS=${rest#*:}
-    DB_PASS=${DB_PASS%%@*}
+    # bash 不做 URL 解码：密码里再出现一个 @ 就和主机分隔符无法区分，提前报清楚
+    nats=$(printf '%s' "$rest" | tr -cd '@' | wc -c)
+    [[ $nats -eq 1 ]] || { echo "$app: DATABASE_URL 的密码含 @，无法解析（请更换密码）" >&2; return 1; }
+    DB_USER=${rest%%@*} # @ 之前是 user[:password]，密码可以带 :
+    if [[ $DB_USER == *:* ]]; then
+      DB_PASS=${DB_USER#*:}
+      DB_USER=${DB_USER%%:*}
+    else
+      DB_PASS=''
+    fi
+    [[ -n $DB_USER ]] || { echo "$app: DATABASE_URL 里没有用户名" >&2; return 1; }
     rest=${rest#*@}
   else
     DB_USER=root

@@ -1,13 +1,13 @@
 {
   "name": "deploy-desk",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "description": "Desktop panel for a small Linux server: SSH health probe, project provisioning via projects.conf, backend git-push deploy, frontend SFTP upload.",
   "author": "keep1224",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/start.js",
     "dist:win": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never"
@@ -19,6 +19,11 @@
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   },
   "build": {
     "appId": "com.keep1224.deploydesk",
@@ -40,6 +45,11 @@
       "docs/**/*",
       "package.json"
     ],
+    "npmRebuild": false,
+    "electronDownload": {
+      "cache": ".electron-cache",
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
     "extraResources": [
       {
         "from": "server",

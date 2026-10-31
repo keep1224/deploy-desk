@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, nativeTheme, clipboard } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const fs = require('fs');
 const path = require('path');
@@ -30,10 +30,9 @@ function writeStore(data) {
 
 function publicProfile(p) {
   const { passwordEnc, passphraseEnc, ...rest } = p;
+  // 明文不出主进程：只下发“是否已保存”的布尔，需要看的时候走 profile:reveal 单条解密
   return {
     ...rest,
-    password: secretOf(p, 'password'),
-    passphrase: secretOf(p, 'passphrase'),
     hasPassword: !!passwordEnc,
     hasPassphrase: !!passphraseEnc,
   };
@@ -130,9 +129,13 @@ function mkdirp(sftp, dir) {
     (p, part) =>
       p.then(
         () =>
-          new Promise((resolve) => {
+          new Promise((resolve, reject) => {
             cur += '/' + part;
-            sftp.mkdir(cur, () => resolve());
+            sftp.mkdir(cur, (err) => {
+              // err.code 4 = SSH_FX_NO_SUCH_FILE：该目录已存在，视为成功
+              if (err && err.code !== 4) reject(err);
+              else resolve();
+            });
           }),
       ),
     Promise.resolve(),
@@ -167,7 +170,7 @@ function countFiles(dir) {
 }
 
 // ── ipc: profiles ───────────────────────────────────────────
-const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webClean', 'theme'];
+const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webTargetProject', 'webClean', 'theme', 'logPanel'];
 
 ipcMain.handle('profile:list', () => {
   const store = readStore();
@@ -223,6 +226,18 @@ ipcMain.handle('profile:delete', (_e, id) => {
   if (store.lastProfileId === id) store.lastProfileId = store.profiles[0]?.id || null;
   writeStore(store);
   return { ok: true };
+});
+
+// 按需解密单条秘密（「显示」按钮用）。字段白名单写死，避免任意键读取。
+ipcMain.handle('profile:reveal', (_e, { id, field: fieldName }) => {
+  try {
+    if (fieldName !== 'password' && fieldName !== 'passphrase') throw new Error('未知字段');
+    const secret = secretOf(resolveProfile(id), fieldName);
+    if (!secret) throw new Error('没有保存的值');
+    return { ok: true, secret };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('settings:save', (_e, payload) => {
@@ -388,7 +403,9 @@ ipcMain.handle('conf:download', async (_e, id) => {
 });
 
 // ── ipc: nginx ──────────────────────────────────────────────
-const NGINX_CONF = '/etc/nginx/conf.d/projects.conf';
+// apply.sh 为每个项目生成独立的 deploy-<name>.conf；旧版单文件
+// /etc/nginx/conf.d/projects.conf 在首次 apply 时已被迁移(rename)掉，
+// 所以这里按 deploy-*.conf 前缀聚合展示，不再引用那个不存在的单文件。
 
 ipcMain.handle('nginx:show', async (_e, id) => {
   try {
@@ -396,7 +413,7 @@ ipcMain.handle('nginx:show', async (_e, id) => {
     const cmd = [
       'nginx -t 2>&1',
       `echo '@@CONF'`,
-      `if [ -f ${NGINX_CONF} ]; then cat ${NGINX_CONF}; else echo "服务器上还没有 ${NGINX_CONF}，先点「应用更改」"; fi`,
+      `[ -d /etc/nginx/conf.d ] && find /etc/nginx/conf.d -maxdepth 1 -name 'deploy-*.conf' -type f 2>/dev/null | sort | while IFS= read -r f; do echo "## $f"; cat "$f"; echo; done; if ! ls /etc/nginx/conf.d/deploy-*.conf >/dev/null 2>&1; then echo "服务器上还没有 deploy-*.conf，先点「应用更改」"; fi`,
     ].join('; ');
     const r = await withConn(profile, (conn) => exec(conn, cmd, { silent: true }));
     const [test, ...rest] = r.out.split('@@CONF');
@@ -412,7 +429,7 @@ ipcMain.handle('nginx:show', async (_e, id) => {
   }
 });
 
-const SCRIPT_NAMES = ['apply.sh', 'add-project.sh', 'post-receive', 'db.sh'];
+const SCRIPT_NAMES = ['apply.sh', 'add-project.sh', 'post-receive', 'db.sh', 'remove-project.sh'];
 
 function bundledScriptsDir() {
   return app.isPackaged
@@ -435,8 +452,12 @@ ipcMain.handle('conf:apply', async (_e, { id, text }) => {
         await putFile(sftp, path.join(dir, n), `/opt/deploy/${n}`);
         log('info', `  uploaded ${n}`);
       }
-      fs.writeFileSync(path.join(app.getPath('temp'), 'projects.conf'), text, 'utf8');
-      await putFile(sftp, path.join(app.getPath('temp'), 'projects.conf'), '/opt/deploy/projects.conf');
+      // 清单直接经 SFTP 写到服务器，不落本地临时文件：
+      // 固定的 %TEMP%\projects.conf 会被杀软/其他实例占用（EPERM 教训）
+      // 补末尾换行：编辑器里没有最后一行的空行，读回来会少掉一个项目
+      const confText = text.endsWith('\n') ? text : `${text}\n`;
+      await new Promise((resolve, reject) =>
+        sftp.writeFile('/opt/deploy/projects.conf', confText, 'utf8', (err) => (err ? reject(err) : resolve())));
       log('info', '  uploaded projects.conf');
       await exec(conn, 'chmod 755 /opt/deploy/*.sh /opt/deploy/post-receive');
 
@@ -457,7 +478,7 @@ ipcMain.handle('conf:apply', async (_e, { id, text }) => {
 ipcMain.handle('db:list', async (_e, id) => {
   try {
     const profile = resolveProfile(id);
-    const { dbOut, webOut, portsOut } = await withConn(profile, async (conn) => {
+    const { dbOut, webOut, portsOut, hookOut, webFilesOut } = await withConn(profile, async (conn) => {
       const db = await exec(conn, 'bash /opt/deploy/db.sh list 2>/dev/null', { silent: true });
       const web = await exec(
         conn,
@@ -467,8 +488,32 @@ ipcMain.handle('db:list', async (_e, id) => {
       const ports = await exec(conn, `ss -lntH 2>/dev/null | awk '{print $4}' | sed 's/.*://'`, {
         silent: true,
       });
-      return { dbOut: db.out, webOut: web.out, portsOut: ports.out };
+      const hooks = await exec(
+        conn,
+        `for d in /opt/git/*.git; do [ -d "$d" ] || continue; printf '%s\\t%s\\n' "$(basename "$d" .git)" "$(grep -h '^export BRANCH=\\|^BRANCH=' "$d/hooks/post-receive" /opt/deploy/post-receive 2>/dev/null | head -1)"; done`,
+        { silent: true },
+      );
+      // 前端站点的文件数：目录存在但 0 个文件 = apply 建了目录还没发布过
+      const webFiles = await exec(
+        conn,
+        `for d in /var/www/*/; do [ -d "$d" ] || continue; printf '%s\\t%s\\n' "$(basename "$d")" "$(find "$d" -type f 2>/dev/null | wc -l)"; done`,
+        { silent: true },
+      );
+      return { dbOut: db.out, webOut: web.out, portsOut: ports.out, hookOut: hooks.out, webFilesOut: webFiles.out };
     });
+    const webFiles = new Map();
+    for (const line of webFilesOut.split('\n')) {
+      const [name, n] = line.split('\t');
+      if (name && n !== undefined) webFiles.set(name.trim(), Number(n.trim()) || 0);
+    }
+    const hookBranch = new Map();
+    for (const line of hookOut.split('\n')) {
+      const [name, decl] = line.split('\t');
+      if (!name || !decl) continue;
+      // BRANCH=${BRANCH:-master} 取默认值，BRANCH=main 直接取值。
+      const m = decl.match(/:-([^}]*)\}/) || decl.match(/=\s*(\S+)/);
+      if (m && m[1]) hookBranch.set(name.trim(), m[1].trim());
+    }
     const rows = dbOut
       .split('\n')
       .map((l) => l.split('\t'))
@@ -479,13 +524,23 @@ ipcMain.handle('db:list', async (_e, id) => {
         exists: exists === 'yes',
         size: size || '-',
         tables: tables || '-',
+        branch: hookBranch.get(name) || '',
       }));
 
     const seen = new Set(rows.map((row) => row.name));
     for (const name of webOut.split('\n').map((l) => l.trim())) {
       if (!name || seen.has(name)) continue;
       seen.add(name);
-      rows.push({ name, db: '-', exists: false, size: '-', tables: '-', web: true });
+      rows.push({
+        name,
+        db: '-',
+        exists: false,
+        size: '-',
+        tables: '-',
+        web: true,
+        branch: hookBranch.get(name) || '',
+        files: webFiles.get(name),
+      });
     }
     return { ok: true, rows, ports: portsOut.trim().split(/\s+/).filter(Boolean) };
   } catch (err) {
@@ -550,18 +605,74 @@ ipcMain.handle('db:import', async (_e, { id, app }) => {
   }
 });
 
-ipcMain.handle('shell:openExternal', async (_e, url) => {
+ipcMain.handle('clip:write', (_e, text) => {
   try {
-    const parsed = new URL(String(url));
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('只支持 http/https');
-    await shell.openExternal(parsed.href);
+    clipboard.writeText(String(text ?? ''));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
 
+// 从服务器删除一个项目（清单行移除后的配套清理）
+ipcMain.handle('project:remove', async (_e, { id, name, withDb }) => {
+  try {
+    const profile = resolveProfile(id);
+    if (!/^[a-z][a-z0-9-]{2,30}$/.test(name || '')) throw new Error('项目名不合法');
+    const script = path.join(bundledScriptsDir(), 'remove-project.sh');
+    if (!fs.existsSync(script)) throw new Error('内置脚本缺失: remove-project.sh');
+    log('info', `\n$ remove-project.sh ${name}${withDb ? ' --with-db' : ''}`);
+    const r = await withConn(profile, async (conn) => {
+      const sftp = await sftpOf(conn);
+      await mkdirp(sftp, '/opt/deploy');
+      await putFile(sftp, script, '/opt/deploy/remove-project.sh');
+      await exec(conn, 'chmod 755 /opt/deploy/remove-project.sh', { silent: true });
+      return exec(conn, `bash /opt/deploy/remove-project.sh ${name}${withDb ? ' --with-db' : ''} 2>&1`);
+    });
+    return { ok: r.code === 0, code: r.code, out: r.out };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ── ipc: deploy backend (local git push) ────────────────────
+function runGit(repoDir, args) {
+  return new Promise((resolve) => {
+    const child = spawn('git', ['-C', repoDir, ...args], { shell: process.platform === 'win32' });
+    let out = '';
+    child.stdout?.on('data', (d) => {
+      out += d.toString();
+    });
+    child.on('close', (code) => resolve({ code, out }));
+    child.on('error', () => resolve({ code: -1, out: '' }));
+  });
+}
+
+// 发布页的「远端 / 分支」是仓库里真实存在的名字，不是让用户猜。
+ipcMain.handle('git:inspect', async (_e, repoDir) => {
+  try {
+    if (!repoDir) throw new Error('未选择仓库目录');
+    if (!fs.existsSync(path.join(repoDir, '.git'))) throw new Error(`不是 git 仓库: ${repoDir}`);
+    const remotes = await runGit(repoDir, ['remote', '-v']);
+    if (remotes.code !== 0) throw new Error('git remote 执行失败，请确认 git 已安装并在 PATH 中');
+    const branches = await runGit(repoDir, ['branch', '--list', '--format=%(refname:short)']);
+    const head = await runGit(repoDir, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const urls = new Map();
+    for (const line of remotes.out.split('\n')) {
+      const m = line.trim().match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+      if (m && (!urls.has(m[1]) || m[3] === 'push')) urls.set(m[1], m[2]);
+    }
+    return {
+      ok: true,
+      remotes: [...urls].map(([name, url]) => ({ name, url })),
+      branches: branches.out.split('\n').map((s) => s.trim()).filter(Boolean),
+      head: head.out.trim(),
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle('deploy:push', async (_e, { repoDir, remote, branch }) => {
   try {
     if (!repoDir || !fs.existsSync(path.join(repoDir, '.git'))) {
@@ -583,28 +694,91 @@ ipcMain.handle('deploy:push', async (_e, { repoDir, remote, branch }) => {
 });
 
 // ── ipc: publish frontend (sftp upload) ─────────────────────
-ipcMain.handle('web:upload', async (_e, { id, localDir, remoteDir, clean }) => {
+ipcMain.handle('web:upload', async (_e, { id, localDir, remoteDir, clean, port }) => {
   try {
     if (!fs.existsSync(localDir)) throw new Error(`目录不存在: ${localDir}`);
+    // 目标目录安全校验：必须绝对路径、不含 ..、每段为常规目录名；
+    // 勾选「清空」时额外要求至少到第 3 级（如 /var/www/<项目>），
+    // 避免误清 /etc、/var/www 等顶级目录。项目表默认给的是 /var/www/<项目>，
+    // 自定义路径（发布页的「自定义路径…」）只要不是顶级系统目录即可。
+    const remote = String(remoteDir || '').trim().replace(/\/+$/, '');
+    if (!remote.startsWith('/')) {
+      throw new Error(`目标目录必须是绝对路径，收到: ${remoteDir}`);
+    }
+    const segs = remote.split('/').filter(Boolean);
+    if (segs.length === 0 || segs.some((s) => !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(s))) {
+      throw new Error(`目标目录不合法（需形如 /var/www/<项目>，不能含 .. 或异常字符）: ${remoteDir}`);
+    }
+    if (clean && segs.length < 3) {
+      throw new Error(`勾选「清空」时目标至少要到第 3 级（如 /var/www/<项目>），避免误清顶级目录: ${remote}`);
+    }
     const profile = resolveProfile(id);
     const total = countFiles(localDir);
     let done = 0;
-    log('info', `\n$ 上传 ${localDir} → ${profile.host}:${remoteDir} (${total} 个文件)`);
+    let check = null;
+    const staging = clean ? `${remote}.staging` : remote;
+    log('info', `\n$ 上传 ${localDir} → ${profile.host}:${staging} (${total} 个文件)\n`);
 
     await withConn(profile, async (conn) => {
       const sftp = await sftpOf(conn);
       if (clean) {
-        log('info', `  清空 ${remoteDir}`);
-        await exec(conn, `rm -rf ${JSON.stringify(remoteDir)} && mkdir -p ${JSON.stringify(remoteDir)}`);
+        // 先把暂存目录清掉再上传，全部传完后原子切换；上传期间旧站点仍可服务
+        log('info', `  清空暂存目录 ${staging}\n`);
+        const prep = await exec(conn, `rm -rf ${JSON.stringify(staging)} && mkdir -p ${JSON.stringify(staging)}`);
+        if (prep.code !== 0) throw new Error(`清空暂存目录失败（退出码 ${prep.code}）`);
       }
-      await uploadDir(sftp, localDir, remoteDir, (file) => {
+      await uploadDir(sftp, localDir, staging, (file) => {
         done += 1;
-        if (done % 20 === 0 || done === total) log('info', `  ${done}/${total}`);
+        if (done % 20 === 0 || done === total) log('info', `  ${done}/${total}\n`);
       });
+      if (clean) {
+        log('info', `  切换 ${staging} → ${remote}\n`);
+        const sw = await exec(
+          conn,
+          [
+            `rm -rf ${JSON.stringify(`${remote}.old`)}`,
+            `if [ -d ${JSON.stringify(remote)} ]; then mv ${JSON.stringify(remote)} ${JSON.stringify(`${remote}.old`)}; fi`,
+            `mv ${JSON.stringify(staging)} ${JSON.stringify(remote)}`,
+          ].join(' && ')
+        );
+        if (sw.code !== 0) {
+          // 切换失败：尽力把旧站点还原回原位，暂存目录留着供排查
+          await exec(
+            conn,
+            `if [ -d ${JSON.stringify(`${remote}.old`)} ] && [ ! -d ${JSON.stringify(remote)} ]; then mv ${JSON.stringify(`${remote}.old`)} ${JSON.stringify(remote)}; fi`,
+            { silent: true },
+          );
+          throw new Error(
+            `切换失败（退出码 ${sw.code}）：旧站点未受影响，新内容仍在 ${staging}，可重新发布重试`,
+          );
+        }
+        await exec(conn, `rm -rf ${JSON.stringify(`${remote}.old`)}`, { silent: true });
+      }
+
+      // 文件到位 ≠ 站点可访问：用清单里的端口在服务器本机请求一次，
+      // 免得清单没应用、端口没 listen 时面板照样报「已发布」。
+      log('info', `  完成 ${done} 个文件\n`);
+      const p = String(port ?? '').trim();
+      if (/^\d{2,5}$/.test(p)) {
+        const probe = await exec(
+          conn,
+          `curl -fsS -m 8 -o /dev/null -w '%{http_code}' http://127.0.0.1:${p}/ 2>&1 || true`,
+          { silent: true },
+        );
+        const code = ((probe.out || '').match(/\d{3}/) || [])[0] || '';
+        check = { port: p, code };
+        if (code === '200') log('info', `  站点自检 http://127.0.0.1:${p}/ → HTTP 200\n`);
+        else {
+          log(
+            'err',
+            `  站点自检 http://127.0.0.1:${p}/ → ${code || '无响应'}：文件已经到位，但 nginx 没返回 200。` +
+              `去「项目」确认该项目的端口列，改过清单要点「应用更改」。\n`,
+          );
+        }
+      }
     });
 
-    log('info', `  完成 ${done} 个文件`);
-    return { ok: true, files: done };
+    return { ok: true, files: done, check };
   } catch (err) {
     return { ok: false, error: err.message };
   }

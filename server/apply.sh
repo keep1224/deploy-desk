@@ -19,6 +19,12 @@
 # TLS is out of scope on purpose: run 'certbot certonly --webroot' (it only
 # touches /etc/letsencrypt) and add a listen 443 server block in a file that
 # does not match deploy-*.conf.
+#
+# --- per-project extras -----------------------------------------------------
+# If $SNIPPET_DIR/<name>.conf exists it is included INSIDE that project's
+# server block, so gzip, cache headers, extra locations or a second listen can
+# be added without giving up convergence: the generated part is still rewritten
+# every apply, the snippet is never touched by this script.
 set -euo pipefail
 
 CONF=${1:?usage: apply.sh <projects.conf>}
@@ -27,6 +33,10 @@ APPS_DIR=${APPS_DIR:-/opt/apps}
 SITES_DIR=${SITES_DIR:-/etc/nginx/conf.d}
 SITE_PREFIX=${SITE_PREFIX:-deploy-}
 LEGACY_CONF=${LEGACY_CONF:-$SITES_DIR/projects.conf}
+# Per-project escape hatch: drop <name>.conf here and it gets included inside
+# that project's server block. Never written by this script, so it survives
+# every apply. Anything that needs more than the 6 columns goes here.
+SNIPPET_DIR=${SNIPPET_DIR:-/opt/deploy/snippets}
 
 [[ $(id -u) -eq 0 ]] || { echo 'run as root' >&2; exit 1; }
 [[ -f $CONF ]] || { echo "no such file: $CONF" >&2; exit 1; }
@@ -35,7 +45,10 @@ declare -A TYPE=() PORT=() DOMAIN=() API=() DBCOL=()
 order=()
 
 echo "==> reading $CONF"
-while read -r name type port domain api db rest; do
+# 末行没有换行符时 read 返回非 0，但变量里仍是最后一行，所以补一次判断，
+# 否则清单里最后一个项目会被静默跳过。
+# shellcheck disable=SC2034  # rest 有意吞掉行内注释等尾随列
+while read -r name type port domain api db rest || [[ -n ${name:-} ]]; do
   [[ -z ${name:-} || $name == \#* ]] && continue
   [[ -z ${type:-} ]] && continue
 
@@ -61,7 +74,7 @@ done < "$CONF"
 [[ ${#order[@]} -gt 0 ]] || { echo 'no projects in config' >&2; exit 1; }
 
 echo "==> checking for conflicts"
-declare -A by_port=() by_domain=()
+declare -A by_port=() domain_rows=()
 for name in "${order[@]}"; do
   if [[ ${PORT[$name]} != - ]]; then
     [[ ${PORT[$name]} =~ ^[0-9]+$ ]] || { echo "$name: bad port ${PORT[$name]}" >&2; exit 1; }
@@ -69,10 +82,27 @@ for name in "${order[@]}"; do
       && { echo "port ${PORT[$name]} used by both $name and ${by_port[${PORT[$name]}]}" >&2; exit 1; }
     by_port[${PORT[$name]}]=$name
   fi
-  if [[ ${DOMAIN[$name]} != - ]]; then
-    [[ -n ${by_domain[${DOMAIN[$name]}]:-} ]] \
-      && { echo "domain ${DOMAIN[$name]} used by both $name and ${by_domain[${DOMAIN[$name]}]}" >&2; exit 1; }
-    by_domain[${DOMAIN[$name]}]=$name
+  [[ ${DOMAIN[$name]} != - ]] && domain_rows[${DOMAIN[$name]}]+="$name "
+done
+
+# 同一域名被多行使用只放行一种场合：每行都是 web 且都写了显式端口——
+# 没有 DNS 的服务器（域名就是 IP）靠 listen 端口区分站点，nginx 对
+# 「同 server_name、不同 listen」本来就不告警。api 行的端口是后端自己的
+# 监听端口、站点永远 listen 80，掺进来必然撞端口，所以不允许。
+# 端口互不相同由上面的 by_port 全局唯一保证。
+for d in "${!domain_rows[@]}"; do
+  read -ra users <<< "${domain_rows[$d]}"
+  (( ${#users[@]} > 1 )) || continue
+  shareable=yes
+  for u in "${users[@]}"; do
+    [[ ${TYPE[$u]} == web && ${PORT[$u]} != - ]] || { shareable=no; break; }
+  done
+  if [[ $shareable == yes ]]; then
+    echo "    note: $d shared by ${users[*]} (distinguished by listen ports)"
+  else
+    echo "domain $d used by multiple projects (${users[*]});" >&2
+    echo "sharing a domain requires every row to be web with an explicit distinct port" >&2
+    exit 1
   fi
 done
 
@@ -103,13 +133,17 @@ site_file() { printf '%s/%s%s.conf' "$SITES_DIR" "$SITE_PREFIX" "$1"; }
 # Render the vhost for one project.
 #   api: everything goes to the backend, so /health, /api-docs and /metrics work
 #   web: static root + SPA fallback, /api/ proxied when an api project is set
-site_render() { # <out> <name> <type> <domain> <upstream>
-  local out=$1 name=$2 type=$3 domain=$4 upstream=${5:-}
+#        listen comes from the port column (default 80) - it is the public port
+#        nginx serves the site on, nothing else ever binds to it
+site_render() { # <out> <name> <type> <domain> <upstream> [listen]
+  local out=$1 name=$2 type=$3 domain=$4 upstream=${5:-} listen=${6:-80}
   {
     printf '# managed by deploy/apply.sh - rewritten on every apply, do not edit\n'
+    # 版本标记：换脚本后能一眼看出这份文件是谁生成的（v2 = web 端口列即 listen 端口）
+    printf '# schema v2 - web port column is the nginx listen port\n'
     printf '# project: %s (%s)\n' "$name" "$type"
     printf 'server {\n'
-    printf '    listen 80;\n'
+    printf '    listen %s;\n' "$listen"
     printf '    server_name %s;\n' "$domain"
     if [[ $type == api ]]; then
       printf '\n    location / {\n'
@@ -136,16 +170,21 @@ site_render() { # <out> <name> <type> <domain> <upstream>
         printf '    }\n'
       fi
     fi
+    # Hand-written extras live outside this file, so apply never eats them.
+    if [[ -f $SNIPPET_DIR/$name.conf ]]; then
+      printf '\n    # extras - hand written, not managed by apply.sh\n'
+      printf '    include %s/%s.conf;\n' "$SNIPPET_DIR" "$name"
+    fi
     printf '}\n'
   } > "$out"
 }
 
-site_write() { # <name> <type> <domain> <upstream>
+site_write() { # <name> <type> <domain> <upstream> [listen]
   local f
   f=$(site_file "$1")
   SITE_FILES+=("$f")
 
-  site_render "$f.tmp" "$1" "$2" "$3" "${4:-}"
+  site_render "$f.tmp" "$1" "$2" "$3" "${4:-}" "${5:-80}"
   if [[ ! -f $f ]]; then
     CREATED_SITES+=("$f")
     mv "$f.tmp" "$f"
@@ -158,6 +197,11 @@ site_write() { # <name> <type> <domain> <upstream>
     mv "$f.tmp" "$f"
     echo "    nginx updated: $f"
     CHANGED_NGINX=yes
+  fi
+  # 末行不能用 "test && echo" 的短路写法：无 snippet（默认）时该式返回 1，
+  # 在 set -e 下会让 site_write 返回 1、进而中止整个 apply。改成 if 形式，恒返回 0。
+  if [[ -f $SNIPPET_DIR/$1.conf ]]; then
+    echo "    + extras: $SNIPPET_DIR/$1.conf"
   fi
 }
 
@@ -201,6 +245,7 @@ BACKUP_DIR=$(mktemp -d)
 trap 'rm -rf "$BACKUP_DIR"' EXIT
 
 install -d "$SITES_DIR"
+install -d "$SNIPPET_DIR"
 
 # Snapshot every vhost we own BEFORE touching anything. CREATED_SITES covers
 # files that did not exist yet; this covers every file that did.
@@ -209,12 +254,14 @@ for f in "$SITES_DIR/$SITE_PREFIX"*.conf; do
 done
 
 # One-time migration: the old single-file layout also defined these vhosts, and
-# two files cannot own the same server_name. Everything it held is regenerated
-# below, so it is disabled (not deleted) and a reload is scheduled.
+# two files cannot own the same server_name. The file is renamed out of nginx's
+# include glob (conf.d/*.conf) but kept on disk — nothing in it is lost. Every
+# vhost it held is regenerated below from the project list.
 if [[ -f $LEGACY_CONF ]]; then
+  kept="$LEGACY_CONF.migrated-$(date +%Y%m%d-%H%M%S)"
   echo "==> migrating legacy $LEGACY_CONF"
-  mv "$LEGACY_CONF" "$BACKUP_DIR/$(basename "$LEGACY_CONF")"
-  echo "    moved to backup; every vhost in it is regenerated below"
+  mv "$LEGACY_CONF" "$kept"
+  echo "    kept as $kept (no longer loaded); every vhost in it is regenerated below"
   CHANGED_NGINX=yes
 fi
 
@@ -242,7 +289,10 @@ for name in "${order[@]}"; do
     [[ -n $upstream ]] \
       || { echo "    cannot read PORT from $APPS_DIR/${API[$name]}/.env" >&2; exit 1; }
   fi
-  site_write "$name" web "${DOMAIN[$name]}" "$upstream"
+  # web has no process of its own, so the port column is the nginx listen port
+  listen=80
+  [[ ${PORT[$name]} != - ]] && listen=${PORT[$name]}
+  site_write "$name" web "${DOMAIN[$name]}" "$upstream" "$listen"
 done
 
 echo "==> api domains"
@@ -266,7 +316,9 @@ for f in "$SITES_DIR/$SITE_PREFIX"*.conf; do
   site_remove "$f"
   STALE=$((STALE + 1))
 done
-[[ $STALE -eq 0 ]] && echo '  none'
+if [[ $STALE -eq 0 ]]; then
+  echo '  none'
+fi
 
 if ! nginx_commit; then
   echo 'apply aborted: nginx config was NOT applied (server left as it was)' >&2
@@ -276,5 +328,9 @@ fi
 echo
 echo 'converged. deploy each api project with:'
 for name in "${order[@]}"; do
-  [[ ${TYPE[$name]} == api ]] && echo "  git push deploy master    # $name -> /opt/git/$name.git"
+  # 用 if 而不是 "[[ ]] && echo"：web 行让短路式返回 1，
+  # 它是脚本最后一条命令，会让成功的 apply 以退出码 1 结束。
+  if [[ ${TYPE[$name]} == api ]]; then
+    echo "  git push deploy master    # $name -> /opt/git/$name.git"
+  fi
 done
