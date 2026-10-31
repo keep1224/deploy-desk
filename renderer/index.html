@@ -81,13 +81,13 @@
             <table class="tbl proj-tbl" id="projTable">
               <thead>
                 <tr>
-                  <th>项目</th>
-                  <th>类型</th>
-                  <th>端口</th>
-                  <th>域名</th>
-                  <th>上游 api</th>
-                  <th>数据库</th>
-                  <th>状态</th>
+                  <th class="c-name">项目</th>
+                  <th class="c-type">类型</th>
+                  <th class="c-port">端口</th>
+                  <th class="c-st">状态</th>
+                  <th class="c-db">建库</th>
+                  <th class="c-domain">域名</th>
+                  <th class="c-api">上游 api</th>
                   <th class="col-actions">操作</th>
                 </tr>
               </thead>
@@ -114,40 +114,40 @@
 
         <div class="split">
           <section class="card">
-            <h2>连接配置</h2>
+            <div class="card-head">
+              <h2>连接配置</h2>
+              <p id="secretHint" class="hint card-head-hint"></p>
+            </div>
             <form id="profileForm" class="form">
-              <label>名称<input name="name" placeholder="生产服务器" /></label>
-              <div class="row">
-                <label class="grow">主机<input name="host" placeholder="服务器 IP，如 203.0.113.10" required /></label>
-                <label class="port-field">端口<input name="port" value="22" /></label>
-              </div>
-              <div class="row">
-                <label class="grow">用户<input name="username" placeholder="root" /></label>
-                <label class="auth-field">认证
+              <div class="form-grid">
+                <label class="col-all">名称<input name="name" placeholder="生产服务器" /></label>
+                <label class="col-2">主机<input name="host" placeholder="服务器 IP，如 203.0.113.10" required /></label>
+                <label>端口<input name="port" value="22" /></label>
+                <label class="col-2">用户<input name="username" placeholder="root" /></label>
+                <label>认证
                   <select name="auth">
                     <option value="key">私钥</option>
                     <option value="password">密码</option>
                   </select>
                 </label>
-              </div>
-              <div data-auth="key">
-                <label>私钥路径<input name="keyPath" placeholder="C:\Users\you\.ssh\id_rsa" /></label>
-                <label>私钥密码（可选）<input name="passphrase" type="password" placeholder="可选" /></label>
-              </div>
-              <div data-auth="password" hidden>
-                <label>密码
-                  <span class="input-row">
-                    <input name="password" type="password" placeholder="输入密码后点保存" />
-                    <button type="button" id="btnShowPwd" class="btn tiny">显示</button>
-                  </span>
-                </label>
+                <div data-auth="key" class="form-grid col-all">
+                  <label class="col-2">私钥路径<input name="keyPath" placeholder="C:\Users\you\.ssh\id_rsa" /></label>
+                  <label>私钥密码（可选）<input name="passphrase" type="password" placeholder="可选" /></label>
+                </div>
+                <div data-auth="password" class="form-grid col-all" hidden>
+                  <label class="col-all">密码
+                    <span class="input-row">
+                      <input name="password" type="password" placeholder="输入密码后点保存" />
+                      <button type="button" id="btnShowPwd" class="btn tiny">显示</button>
+                    </span>
+                  </label>
+                </div>
               </div>
               <div class="row actions">
                 <button type="submit" class="btn primary">保存</button>
                 <button type="button" id="btnDeleteProfile" class="btn danger">删除</button>
                 <button type="button" id="btnNewProfile" class="btn">新建</button>
               </div>
-              <p id="secretHint" class="hint"></p>
             </form>
           </section>
 
@@ -175,12 +175,12 @@
         </div>
 
         <section class="card">
-          <div class="nginx-line">
+          <div class="card-head">
             <div class="nginx-meta">
-              <div class="nginx-title">服务器 nginx 配置</div>
+              <h2>服务器 nginx 配置</h2>
               <div class="nginx-path">/etc/nginx/conf.d/deploy-&lt;项目&gt;.conf · 每次应用都会重写</div>
             </div>
-            <div class="nginx-side">
+            <div class="card-tools">
               <span id="nginxState" class="hint">未读取</span>
               <button id="btnOpenNginx" class="btn">查看</button>
             </div>

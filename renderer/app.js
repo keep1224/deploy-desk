@@ -635,6 +635,35 @@ function gridRowOf(row, idx) {
   tdPort.appendChild(portInp);
   tr.appendChild(tdPort);
 
+  tr.appendChild(statusCellOf(row));
+
+  const tdDb = document.createElement('td');
+  tdDb.className = 'c-db';
+  if (row.type === 'api') {
+    const dbSel = document.createElement('select');
+    dbSel.dataset.field = 'db';
+    for (const [v, label] of [['mysql', '自动建库'], ['none', '不建库']]) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = label;
+      dbSel.appendChild(o);
+    }
+    if (!['mysql', 'none'].includes(row.db)) {
+      const o = document.createElement('option');
+      o.value = row.db;
+      o.textContent = row.db;
+      dbSel.appendChild(o);
+    }
+    dbSel.value = row.db;
+    tdDb.appendChild(dbSel);
+  } else {
+    const dash = document.createElement('span');
+    dash.className = 'muted';
+    dash.textContent = '—';
+    tdDb.appendChild(dash);
+  }
+  tr.appendChild(tdDb);
+
   const tdDom = document.createElement('td');
   tdDom.className = 'c-domain';
   const domInp = document.createElement('input');
@@ -671,35 +700,6 @@ function gridRowOf(row, idx) {
     tdApi.appendChild(dash);
   }
   tr.appendChild(tdApi);
-
-  const tdDb = document.createElement('td');
-  tdDb.className = 'c-db';
-  if (row.type === 'api') {
-    const dbSel = document.createElement('select');
-    dbSel.dataset.field = 'db';
-    for (const [v, label] of [['mysql', '自动建库'], ['none', '不建库']]) {
-      const o = document.createElement('option');
-      o.value = v;
-      o.textContent = label;
-      dbSel.appendChild(o);
-    }
-    if (!['mysql', 'none'].includes(row.db)) {
-      const o = document.createElement('option');
-      o.value = row.db;
-      o.textContent = row.db;
-      dbSel.appendChild(o);
-    }
-    dbSel.value = row.db;
-    tdDb.appendChild(dbSel);
-  } else {
-    const dash = document.createElement('span');
-    dash.className = 'muted';
-    dash.textContent = '—';
-    tdDb.appendChild(dash);
-  }
-  tr.appendChild(tdDb);
-
-  tr.appendChild(statusCellOf(row));
 
   const tdAct = document.createElement('td');
   tdAct.className = 'actions';
