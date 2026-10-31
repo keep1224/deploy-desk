@@ -713,6 +713,8 @@ function gridRowOf(row, idx) {
 
   const tdAct = document.createElement('td');
   tdAct.className = 'actions';
+  const acts = document.createElement('div');
+  acts.className = 'act-line';
   const url = projectUrl(row);
   if (url) {
     const copy = document.createElement('button');
@@ -720,7 +722,7 @@ function gridRowOf(row, idx) {
     copy.textContent = '复制';
     copy.dataset.copy = url;
     copy.title = `复制站点地址 ${url}（含端口）`;
-    tdAct.appendChild(copy);
+    acts.appendChild(copy);
   }
   const pub = document.createElement('button');
   pub.className = 'btn ghost tiny';
@@ -728,12 +730,20 @@ function gridRowOf(row, idx) {
   pub.dataset.pubOpen = row.name;
   pub.dataset.pubType = row.type === 'api' ? 'api' : 'web';
   pub.title = row.type === 'api'
-    ? 'git push 这个项目；弹窗里会列出仓库真实的远端和分支'
+    ? '把本地仓库代码推送到服务器并重启服务；数据库数据不受影响'
     : `上传 dist 到 /var/www/${row.name}，弹窗里确认目录后上传`;
-  tdAct.appendChild(pub);
+  acts.appendChild(pub);
+  // 数据库操作和「发布」分开成组：发布管代码，这组只管库
   if (row.type === 'api') {
     const deployed = proj.server.has(row.name);
-    for (const [action, label] of [['migrate', '迁移'], ['dump', '备份'], ['import', '导入']]) {
+    const dbGroup = document.createElement('span');
+    dbGroup.className = 'act-db';
+    const dbLabel = document.createElement('span');
+    dbLabel.className = 'act-db-label';
+    dbLabel.textContent = '数据库';
+    dbLabel.title = '以下按钮只操作这个项目的数据库，不会重新发布代码';
+    dbGroup.appendChild(dbLabel);
+    for (const [action, label] of [['migrate', '迁移'], ['dump', '备份'], ['import', '导入 SQL']]) {
       const b = document.createElement('button');
       b.className = 'btn ghost tiny';
       b.textContent = label;
@@ -741,16 +751,20 @@ function gridRowOf(row, idx) {
       b.dataset.app = row.name;
       b.disabled = !deployed;
       if (!deployed) b.title = '先在服务器上初始化并部署这个项目';
-      else if (action === 'import') b.title = '把本地 .sql / .sql.gz 导入这个项目的数据库';
-      tdAct.appendChild(b);
+      else if (action === 'migrate') b.title = '在服务器上执行数据库迁移（只改表结构，不动代码）';
+      else if (action === 'dump') b.title = '导出这个项目的数据库到 /var/backups';
+      else b.title = '把本地 .sql / .sql.gz 导入这个项目的数据库（覆盖同名表）';
+      dbGroup.appendChild(b);
     }
+    acts.appendChild(dbGroup);
   }
   const del = document.createElement('button');
   del.className = 'btn ghost tiny row-del';
   del.textContent = '✕';
   del.dataset.rowDel = '1';
   del.title = '从清单移除这一行（服务器上的文件和数据库不会动）';
-  tdAct.appendChild(del);
+  acts.appendChild(del);
+  tdAct.appendChild(acts);
   tr.appendChild(tdAct);
   return tr;
 }

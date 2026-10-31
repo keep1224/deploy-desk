@@ -928,12 +928,32 @@ body.log-hidden .console-wrap { display: none; }
 /* ── 项目清单：单元格直接编辑 ──────────────────────────────── */
 /* 8 列可编辑布局比容器宽时宁可横向滚动，也不压缩列宽（否则操作列按钮竖排撑高行）；
    项目列和操作列 sticky，滚动时两边始终可见 */
-.proj-tbl { table-layout: fixed; min-width: 1024px; }
-.proj-tbl .col-actions { width: 212px; }
+.proj-tbl { table-layout: fixed; min-width: 1132px; }
+.proj-tbl .col-actions { width: 320px; }
 .proj-tbl td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
 .proj-tbl .c-type, .proj-tbl .c-port, .proj-tbl .c-db, .proj-tbl .c-st { text-align: center; }
 .proj-tbl .c-type select, .proj-tbl .c-port input, .proj-tbl .c-db select { text-align: center; }
 .proj-tbl .actions { text-align: right; white-space: nowrap; }
+/* 操作列：代码操作（复制/发布）和数据库操作分两段，数据库段带标签和分隔线；
+   列宽按全部按钮单行排布，宁可变宽也不折行撑高行 */
+.proj-tbl td.actions .act-line {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  white-space: nowrap;
+}
+.proj-tbl td.actions .act-db {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  padding-left: 7px;
+  border-left: 1px solid var(--line);
+}
+.proj-tbl td.actions .act-db-label {
+  margin-right: 3px;
+  font-size: var(--fs-11);
+  color: var(--text-3);
+}
 .proj-tbl .c-name { width: 116px; }
 .proj-tbl .c-type { width: 106px; }
 .proj-tbl .c-port { width: 70px; }

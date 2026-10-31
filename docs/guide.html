@@ -413,7 +413,7 @@
           <tr><td>建库</td><td>仅 api：<b>自动</b>建 MySQL 库（库名=项目名），<b>不建</b>用于纯接口项目；web 恒为 <code>—</code></td></tr>
           <tr><td>域名</td><td>只写主机名或 IP，例如 <code>example.com</code>，不要带 <code>http://</code>。web 必填；api 可空，填了会额外生成 80 端口反代站点</td></tr>
           <tr><td>上游 api</td><td>仅 web：选一个后端后，<code>/api/</code> 会反代到它；不反代就选「不反代」</td></tr>
-          <tr><td>操作</td><td>有域名时出现「复制」（站点地址，含端口）；每行有「发布」；api 行另有「迁移 / 备份 / 导入」；行尾 <b>✕</b> 移除</td></tr>
+          <tr><td>操作</td><td>有域名时出现「复制」（站点地址，含端口）；每行有「发布」（发布代码，不含数据库）；api 行另有「数据库」组：<b>迁移 / 备份 / 导入 SQL</b>，只操作数据库；行尾 <b>✕</b> 移除</td></tr>
         </tbody>
       </table>
     </div>
@@ -490,14 +490,14 @@
     <h2 class="sec"><span class="sn">5</span>数据库与 nginx</h2>
 
     <h3>数据库</h3>
-    <p>只对<strong>已部署的后端行</strong>可用，按钮灰说明还没部署。连接信息来自该项目的 <code>/opt/apps/&lt;项目&gt;/.env</code> 里的 <code>DATABASE_URL</code>，面板不单独保存数据库密码。</p>
+    <p>只对<strong>已部署的后端行</strong>可用，按钮灰说明还没部署。操作列里带「数据库」标签的一组按钮只管数据库，和上方的「发布」互不影响。连接信息来自该项目的 <code>/opt/apps/&lt;项目&gt;/.env</code> 里的 <code>DATABASE_URL</code>，面板不单独保存数据库密码。</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th style="width:70px">按钮</th><th>做什么</th><th>说明</th></tr></thead>
         <tbody>
           <tr><td>迁移</td><td><code>pnpm exec prisma migrate deploy</code></td><td>以项目用户在应用目录执行，生成/更新表结构</td></tr>
           <tr><td>备份</td><td><code>mysqldump ... | gzip</code></td><td>存到服务器 <code>/var/backups/&lt;项目&gt;-时间.sql.gz</code></td></tr>
-          <tr><td>导入</td><td><code>mysql ... &lt; 文件</code></td><td>选本地 <code>.sql</code> / <code>.sql.gz</code>，先传到 <code>/tmp</code> 再导入，导入前二次确认</td></tr>
+          <tr><td>导入 SQL</td><td><code>mysql ... &lt; 文件</code></td><td>选本地 <code>.sql</code> / <code>.sql.gz</code>，先传到 <code>/tmp</code> 再导入，导入前二次确认</td></tr>
         </tbody>
       </table>
     </div>
