@@ -6,7 +6,7 @@
     <title>Deploy Desk</title>
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body class="log-hidden">
+  <body>
     <aside class="side">
       <div class="brand"><span class="logo">D</span>Deploy Desk</div>
 
@@ -202,7 +202,7 @@
         <span class="console-title"><span class="live-dot"></span>执行过程</span>
         <span class="card-tools">
           <button id="btnClear" class="btn ghost tiny">清空</button>
-          <button id="btnLogHide" class="btn ghost tiny" title="收起日志面板（表格将占满整行）">»</button>
+          <button id="btnLogHide" class="btn ghost tiny" title="关闭日志面板，右下角「执行过程」可以重新打开">关闭</button>
         </span>
       </div>
       <pre id="console" class="console"></pre>
@@ -267,7 +267,7 @@
             <div class="row actions">
               <button id="btnPush" class="btn primary">git push 发布</button>
             </div>
-            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart。面板只确认 git 推送成功，构建结果看右侧日志里的 remote: 输出。</p>
+            <p class="hint">推送后服务器会依次执行 install → build → migrate → restart。面板只确认 git 推送成功，构建结果看顶部「执行过程」里的 remote: 输出。</p>
           </section>
           <section id="pubFrontend" class="pub-pane" hidden>
             <label>dist 目录
@@ -291,7 +291,7 @@
     </div>
 
 
-    <button id="btnLogShow" class="btn ghost tiny" title="查看执行过程"><span class="log-dot"></span>执行过程</button>
+    <button id="btnLogShow" class="btn ghost tiny" title="查看执行过程" hidden><span class="log-dot"></span>执行过程</button>
     <script src="app.js"></script>
   </body>
 </html>

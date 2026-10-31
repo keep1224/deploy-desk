@@ -170,7 +170,7 @@ function countFiles(dir) {
 }
 
 // ── ipc: profiles ───────────────────────────────────────────
-const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webTargetProject', 'webClean', 'theme', 'logPanel'];
+const SETTING_KEYS = ['repoDir', 'distDir', 'gitRemote', 'gitBranch', 'webTarget', 'webTargetProject', 'webClean', 'theme', 'logBar'];
 
 ipcMain.handle('profile:list', () => {
   const store = readStore();

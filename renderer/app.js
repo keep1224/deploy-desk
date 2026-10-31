@@ -47,7 +47,7 @@ function appendLog(kind, text) {
   consoleEl.scrollTop = consoleEl.scrollHeight;
 }
 
-// 日志默认收起，输出落在看不见的面板里，所以按钮上留个提示点：有输出变蓝，报错变红
+// 日志关掉后输出落在看不见的面板里，所以按钮上留个提示点：有输出变蓝，报错变红
 function markLogActivity(kind, text) {
   if (!String(text || '').trim() || !document.body.classList.contains('log-hidden')) return;
   const btn = $('#btnLogShow');
@@ -139,7 +139,7 @@ function applySettings(s) {
     }
   }
   if (typeof s.webClean === 'boolean') $('#webClean').checked = s.webClean;
-  if (s.logPanel === 'on') setLogVisible(true, false);
+  if (s.logBar === 'off') setLogVisible(false, false);
   const theme = typeof s.theme === 'string' ? s.theme : 'system';
   $('#themeSelect').value = theme;
   applyTheme(theme);
@@ -175,12 +175,12 @@ themeMedia.addEventListener('change', () => {
   if ($('#themeSelect').value === 'system') applyTheme('system');
 });
 
-// ── 日志面板收起/展开：默认收起，需要时点右下角按钮展开，选择记住 ──
+// ── 日志面板：默认展开在页面顶部，点「关闭」收起，右下角按钮可重新打开，选择记住 ──
 function setLogVisible(on, persist = true) {
   document.body.classList.toggle('log-hidden', !on);
   $('#btnLogShow').hidden = on;
   if (on) $('#btnLogShow').classList.remove('has-log', 'has-err');
-  if (persist) persistSettings({ logPanel: on ? 'on' : 'off' });
+  if (persist) persistSettings({ logBar: on ? 'on' : 'off' });
 }
 
 $('#btnLogHide').addEventListener('click', () => setLogVisible(false));
@@ -949,7 +949,7 @@ async function uploadWeb(name, btn) {
       failed ? 'err' : 'ok',
       `${name ? `${name} 前端已发布` : '已上传'}（${r.files} 个文件）→ ${remoteDir}${failed ? '，但站点自检未通过' : ''}\n`,
     );
-    closePub(); // 让出右侧日志区
+    closePub(); // 让出顶部日志区
     await refreshServerState({ quiet: true });
   } else {
     appendLog('err', `${name ? `${name} 发布前端失败` : '上传失败'}: ${r.error}\n`);
@@ -1578,7 +1578,7 @@ $('#btnPush').addEventListener('click', async (e) => {
   if (r.ok) {
     proj.published = true;
     renderSteps();
-    closePub(); // 让出右侧日志区：构建结果全在 remote: 输出里
+    closePub(); // 让出顶部日志区：构建结果全在 remote: 输出里
     appendLog('ok', '推送完成（git 退出码 0）。钩子构建失败不会让 push 失败，请核对上方 remote: 输出。\n');
     inspectRepo(); // 自动添加的远端要立刻反映到下拉里
   } else appendLog('err', `推送失败${r.code ? `（退出码 ${r.code}）` : ''}\n`);

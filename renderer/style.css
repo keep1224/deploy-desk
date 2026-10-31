@@ -115,10 +115,10 @@ html, body {
 
 body {
   display: grid;
-  grid-template-columns: clamp(184px, 15vw, 216px) minmax(0, 1fr) clamp(380px, 30vw, 540px);
-  /* 行高钉在视口内（隐式行默认 auto 会随日志内容撑高，
-     overflow:hidden 下超出的内容被直接裁掉、永远不会滚动） */
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: clamp(184px, 15vw, 216px) minmax(0, 1fr);
+  /* 顶上是执行过程日志带，下面是页面内容；行高钉在视口内
+     （隐式行默认 auto 会随日志内容撑高，overflow:hidden 下超出的内容会被直接裁掉） */
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
 }
 
@@ -129,6 +129,7 @@ body {
   min-height: 0;
   background: var(--surface);
   border-right: 1px solid var(--line);
+  grid-row: 1 / -1;
 }
 
 .brand {
@@ -275,6 +276,8 @@ body {
 
 /* ── content ──────────────────────────────────────────────── */
 .content {
+  grid-column: 2;
+  grid-row: 2;
   min-width: 0;
   overflow: auto;
   padding: var(--sp-5) var(--page-gutter) var(--sp-6);
@@ -813,14 +816,17 @@ textarea {
 .chip.warn { color: var(--chip-warn-fg); border-color: rgba(217, 166, 65, .35); background: rgba(217, 166, 65, .1); }
 .chip.bad { color: var(--chip-bad-fg); border-color: rgba(229, 100, 95, .35); background: rgba(229, 100, 95, .1); }
 
-/* ── right console ────────────────────────────────────────── */
+/* ── top console ─────────────────────────────────────────── */
 .console-wrap {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: clamp(150px, 24vh, 220px);
   background: var(--console-bg);
-  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .console-head {
@@ -899,8 +905,7 @@ textarea {
 }
 ::-webkit-scrollbar-thumb:hover { background-color: var(--scroll-thumb-hover); }
 
-/* ── 日志面板收起：两栏布局，表格占满整行 ──────────────────── */
-body.log-hidden { grid-template-columns: clamp(184px, 15vw, 216px) minmax(0, 1fr); }
+/* ── 日志面板关闭：顶部日志带隐藏，右下角按钮可重新打开 ────── */
 body.log-hidden .console-wrap { display: none; }
 #btnLogShow {
   position: fixed;

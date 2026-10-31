@@ -190,10 +190,10 @@
   .m-line.wide { width: 88%; }
   .m-line.short { width: 44%; }
   .m-log {
-    position: absolute; right: 16px; bottom: 16px;
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--surface); color: var(--text-2); font-size: 12px; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 14px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-2); color: var(--text-2); font-size: 12px;
   }
   .m-log i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 
@@ -365,7 +365,7 @@
   <section id="ui">
     <h2 class="sec"><span class="sn">2</span>界面速览</h2>
 
-    <div class="ui-map" role="img" aria-label="界面分区示意：左侧菜单、中间页面、右下角执行过程按钮">
+    <div class="ui-map" role="img" aria-label="界面分区示意：左侧菜单、顶部的执行过程日志带、中间页面">
       <div class="m-side">
         <span class="m-brand"><span class="logo">D</span>Deploy Desk</span>
         <span class="m-item on">配置</span>
@@ -375,11 +375,11 @@
         <span class="m-item">管理连接 · ? · ⚙</span>
       </div>
       <div class="m-main">
+        <span class="m-log"><i></i>执行过程（可关闭）</span>
         <span class="m-title">当前页面：项目表 / 配置表单</span>
         <span class="m-line wide"></span>
         <span class="m-line"></span>
         <span class="m-line short"></span>
-        <span class="m-log"><i></i>执行过程</span>
       </div>
     </div>
 
@@ -390,7 +390,7 @@
           <tr><td>左侧菜单</td><td><strong>配置</strong> / <strong>项目</strong> 两页，所有工作在这两页完成</td></tr>
           <tr><td>左下角</td><td>切换连接、「管理连接」、<strong>?</strong> 打开本说明、齿轮打开设置</td></tr>
           <tr><td>项目页顶部</td><td>四步条（连接 → 清单 → 应用 → 发布）、<strong>刷新状态</strong>、<strong>应用更改</strong></td></tr>
-          <tr><td>右下角「执行过程」</td><td>所有命令、上传进度、服务器输出都在这里。默认收起；有新输出亮蓝点，出错亮红点；点「»」收起，展开状态会记住</td></tr>
+          <tr><td>顶部「执行过程」</td><td>所有命令、上传进度、服务器输出都在这里。默认展开，点「关闭」收起；有新输出亮蓝点，出错亮红点；收起后右下角「执行过程」按钮可以重新打开，开关状态会记住</td></tr>
         </tbody>
       </table>
     </div>
@@ -483,7 +483,7 @@
     </div>
 
     <h3>发布完看哪里</h3>
-    <p>右下角<strong>「执行过程」</strong>是所有命令、上传进度和服务器输出的唯一入口：蓝点表示有新输出，红点表示出过错。发布成功后项目表会自动刷新，后端变「已部署」，前端变「已发布」。</p>
+    <p><strong>「执行过程」</strong>在页面顶部，是所有命令、上传进度和服务器输出的唯一入口：默认展开，点「关闭」收起，右下角「执行过程」按钮可以重新打开；蓝点表示有新输出，红点表示出过错。发布成功后项目表会自动刷新，后端变「已部署」，前端变「已发布」。</p>
   </section>
 
   <section id="advanced">
