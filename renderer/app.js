@@ -919,6 +919,7 @@ async function uploadWeb(name, btn) {
     remoteDir,
     clean,
     port: confRow ? confRow.port : '',
+    domain: confRow ? confRow.domain : '',
   });
   setBusy(btn, false);
   if (r.ok) {

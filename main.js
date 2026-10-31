@@ -673,6 +673,17 @@ ipcMain.handle('git:inspect', async (_e, repoDir) => {
   }
 });
 
+// Electron spawns git outside MSYS; the Git-bundled ssh.exe dies there with
+// NtCreateDirectoryObject, so use the system OpenSSH client when available.
+function gitEnv() {
+  const env = { ...process.env };
+  if (process.platform === 'win32' && !env.GIT_SSH_COMMAND) {
+    const native = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe');
+    if (fs.existsSync(native)) env.GIT_SSH_COMMAND = native.replace(/\\/g, '/');
+  }
+  return env;
+}
+
 ipcMain.handle('deploy:push', async (_e, { repoDir, remote, branch }) => {
   try {
     if (!repoDir || !fs.existsSync(path.join(repoDir, '.git'))) {
@@ -682,6 +693,7 @@ ipcMain.handle('deploy:push', async (_e, { repoDir, remote, branch }) => {
     return await new Promise((resolve) => {
       const child = spawn('git', ['-C', repoDir, 'push', remote, branch], {
         shell: process.platform === 'win32',
+        env: gitEnv(),
       });
       child.stdout?.on('data', (d) => log('out', d.toString()));
       child.stderr?.on('data', (d) => log('err', d.toString()));
@@ -694,7 +706,20 @@ ipcMain.handle('deploy:push', async (_e, { repoDir, remote, branch }) => {
 });
 
 // ── ipc: publish frontend (sftp upload) ─────────────────────
-ipcMain.handle('web:upload', async (_e, { id, localDir, remoteDir, clean, port }) => {
+// 本机 curl 127.0.0.1 时 Host 是 127.0.0.1，nginx 会落到默认站点而不是
+// server_name 匹配的项目站点，所以自检要带上项目域名。
+function selfCheckHost(domain) {
+  const raw = String(domain || '').trim();
+  if (!raw || raw === '-') return '';
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`);
+    return /^[A-Za-z0-9.\-:[\]]+$/.test(u.hostname) ? u.hostname : '';
+  } catch {
+    return '';
+  }
+}
+
+ipcMain.handle('web:upload', async (_e, { id, localDir, remoteDir, clean, port, domain }) => {
   try {
     if (!fs.existsSync(localDir)) throw new Error(`目录不存在: ${localDir}`);
     // 目标目录安全校验：必须绝对路径、不含 ..、每段为常规目录名；
@@ -760,9 +785,11 @@ ipcMain.handle('web:upload', async (_e, { id, localDir, remoteDir, clean, port }
       log('info', `  完成 ${done} 个文件\n`);
       const p = String(port ?? '').trim();
       if (/^\d{2,5}$/.test(p)) {
+        const host = selfCheckHost(domain);
+        const hostArg = host ? ` -H ${JSON.stringify(`Host: ${host}`)}` : '';
         const probe = await exec(
           conn,
-          `curl -fsS -m 8 -o /dev/null -w '%{http_code}' http://127.0.0.1:${p}/ 2>&1 || true`,
+          `curl -fsS -m 8${hostArg} -o /dev/null -w '%{http_code}' http://127.0.0.1:${p}/ 2>&1 || true`,
           { silent: true },
         );
         const code = ((probe.out || '').match(/\d{3}/) || [])[0] || '';
