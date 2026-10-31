@@ -730,16 +730,16 @@ textarea {
   margin-top: var(--sp-3);
 }
 
-.table-foot {
+.table-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-3);
   min-height: 52px;
   padding: var(--sp-2) var(--card-pad);
-  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
-.table-foot .hint { margin: 0; }
+.table-bar .hint { margin: 0; }
 
 .section-toggle {
   display: flex;

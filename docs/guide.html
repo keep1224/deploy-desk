@@ -344,7 +344,7 @@
     <div class="step">
       <span class="num">2</span>
       <h3>填项目表，应用更改</h3>
-      <p>切到 <strong>项目</strong>，点「<strong>+ 新增项目</strong>」，表尾插一行，直接在单元格里填。最少只需<b>名称</b>和<b>类型</b>；<b>前端必须填域名或 IP</b>，后端可以留空。</p>
+      <p>切到 <strong>项目</strong>，点表格上方的「<strong>+ 新增项目</strong>」，会在表尾追加一行，直接在单元格里填。最少只需<b>名称</b>和<b>类型</b>；<b>前端必须填域名或 IP</b>，后端可以留空。</p>
       <p>填完点右上角 <strong>应用更改</strong>。第一次会弹窗确认，然后上传内置部署脚本和清单到 <code>/opt/deploy</code>，执行 <code>apply.sh</code>：</p>
       <ul>
         <li><b>后端</b>：系统用户、<code>/opt/apps/&lt;项目&gt;</code>、裸仓库 <code>/opt/git/&lt;项目&gt;.git</code>、systemd 服务 <code>nest-&lt;项目&gt;</code>、<code>.env</code>；「建库」为自动时还会创建 MySQL 库和账号。</li>
