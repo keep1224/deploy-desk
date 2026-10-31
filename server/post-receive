@@ -75,7 +75,7 @@ if [[ ! -f $APP_DIR/prisma/schema.prisma ]] || grep -q '^DATABASE_ENABLED=false'
   echo '==> migrate (skipped: no database)'
 else
   echo '==> migrate'
-  as_app 'pnpm exec prisma migrate deploy'
+  as_app "$PM exec prisma migrate deploy"
 fi
 
 echo "==> restart $SERVICE"
