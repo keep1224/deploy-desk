@@ -1406,8 +1406,8 @@ function renderGitHint() {
   const branch = $('#gitBranch').value;
   if (!remote) {
     hint.textContent = pushProjectName
-      ? `这个仓库还没有远端。在仓库目录里执行：git remote add deploy ${bareUrlOf(pushProjectName)}`
-      : '这个仓库还没有远端，先在上面选好项目，再执行 git remote add。';
+      ? `这个仓库还没有远端，点「推送并部署」会自动添加 deploy → ${bareUrlOf(pushProjectName)}`
+      : '这个仓库还没有远端，先在上面选好项目，推送时会自动添加。';
     return;
   }
   const url = (repoInfo.remotes.find((r) => r.name === remote) || {}).url || '';
@@ -1538,7 +1538,9 @@ $('#btnPush').addEventListener('click', async (e) => {
     appendLog('err', '先选择仓库目录\n');
     return;
   }
-  const remote = $('#gitRemote').value.trim();
+  // 全新仓库没有远端可选项：选了项目就直接用 deploy，主进程会按清单里的
+  // 项目名自动 git remote add，不需要用户再开终端。
+  const remote = $('#gitRemote').value.trim() || (pushProjectName ? 'deploy' : '');
   const branch = $('#gitBranch').value.trim();
   if (!remote || !branch) {
     appendLog('err', '这个仓库没有可用的远端或本地分支，先看下方提示\n');
@@ -1546,13 +1548,20 @@ $('#btnPush').addEventListener('click', async (e) => {
   }
   const btn = e.currentTarget;
   setBusy(btn, true, '推送中…');
-  const r = await window.api.deploy.push({ repoDir, remote, branch });
+  const r = await window.api.deploy.push({
+    id: state.activeId,
+    repoDir,
+    remote,
+    branch,
+    project: pushProjectName || '',
+  });
   setBusy(btn, false);
   if (r.ok) {
     proj.published = true;
     renderSteps();
     closePub(); // 让出右侧日志区：构建结果全在 remote: 输出里
     appendLog('ok', '推送完成（git 退出码 0）。钩子构建失败不会让 push 失败，请核对上方 remote: 输出。\n');
+    inspectRepo(); // 自动添加的远端要立刻反映到下拉里
   } else appendLog('err', `推送失败${r.code ? `（退出码 ${r.code}）` : ''}\n`);
 });
 

@@ -42,10 +42,33 @@ as_app() {
     bash -c "cd '$APP_DIR' && $1"
 }
 
-echo '==> install'
-as_app 'pnpm install --frozen-lockfile'
-echo '==> build'
-as_app 'pnpm build'
+# 包管理器跟着仓库里的锁文件走：pnpm-lock -> pnpm，package-lock -> npm ci，
+# 都没有就 npm install。不强制项目改用某一种工具。
+if [[ -f $APP_DIR/pnpm-lock.yaml ]]; then
+  PM=pnpm
+  INSTALL='pnpm install --frozen-lockfile'
+elif [[ -f $APP_DIR/package-lock.json ]]; then
+  PM=npm
+  INSTALL='npm ci'
+else
+  PM=npm
+  INSTALL='npm install'
+fi
+
+if [[ -f $APP_DIR/package.json ]]; then
+  echo "==> install ($PM)"
+  as_app "$INSTALL"
+else
+  echo '==> install (skipped: no package.json)'
+fi
+
+# build 是可选的：没有 scripts.build 就不跑，避免把纯服务端项目卡在构建上。
+if [[ -f $APP_DIR/package.json ]] && grep -qE '"build"[[:space:]]*:' "$APP_DIR/package.json"; then
+  echo "==> build ($PM)"
+  as_app "$PM run build"
+else
+  echo '==> build (skipped: no build script)'
+fi
 
 # Projects provisioned with db=none (or not using Prisma) must not run migrations.
 if [[ ! -f $APP_DIR/prisma/schema.prisma ]] || grep -q '^DATABASE_ENABLED=false' "$APP_DIR/.env" 2>/dev/null; then

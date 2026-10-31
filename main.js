@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, safeStorage, nativeTheme, clipboard
 const { autoUpdater } = require('electron-updater');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const { Client } = require('ssh2');
 
 let win = null;
@@ -636,16 +636,172 @@ ipcMain.handle('project:remove', async (_e, { id, name, withDb }) => {
 });
 
 // ── ipc: deploy backend (local git push) ────────────────────
-function runGit(repoDir, args) {
+function runGit(repoDir, args, env) {
   return new Promise((resolve) => {
-    const child = spawn('git', ['-C', repoDir, ...args], { shell: process.platform === 'win32' });
+    const child = spawn('git', ['-C', repoDir, ...args], {
+      shell: process.platform === 'win32',
+      env: env || process.env,
+    });
     let out = '';
+    let errOut = '';
     child.stdout?.on('data', (d) => {
       out += d.toString();
     });
-    child.on('close', (code) => resolve({ code, out }));
-    child.on('error', () => resolve({ code: -1, out: '' }));
+    child.stderr?.on('data', (d) => {
+      errOut += d.toString();
+    });
+    child.on('close', (code) => resolve({ code, out, err: errOut }));
+    child.on('error', () => resolve({ code: -1, out: '', err: '' }));
   });
+}
+
+// 面板自己的部署密钥：生成一次，推到每台服务器一次，之后 git push 全程免交互。
+// 不依赖用户本机已有的 ~/.ssh 配置，也不要求用户手工把公钥贴到服务器。
+function deployKeyPaths() {
+  const dir = path.join(app.getPath('userData'), 'keys');
+  fs.mkdirSync(dir, { recursive: true });
+  return {
+    privateKey: path.join(dir, 'deploy_ed25519'),
+    publicKey: path.join(dir, 'deploy_ed25519.pub'),
+    knownHosts: path.join(dir, 'known_hosts'),
+  };
+}
+
+function ensureLocalDeployKey() {
+  const k = deployKeyPaths();
+  if (!fs.existsSync(k.privateKey) || !fs.existsSync(k.publicKey)) {
+    const native = path.join(
+      process.env.SystemRoot || 'C:\\Windows',
+      'System32',
+      'OpenSSH',
+      'ssh-keygen.exe',
+    );
+    const candidates = process.platform === 'win32' && fs.existsSync(native) ? [native] : ['ssh-keygen'];
+    let lastErr = null;
+    for (const bin of candidates) {
+      try {
+        execFileSync(bin, ['-q', '-t', 'ed25519', '-N', '', '-C', 'deploy-desk', '-f', k.privateKey], {
+          stdio: 'ignore',
+          windowsHide: true,
+        });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) throw new Error(`无法生成部署密钥（需要 ssh-keygen）: ${lastErr.message}`);
+    try {
+      fs.chmodSync(k.privateKey, 0o600);
+    } catch {}
+  }
+  return { ...k, pub: fs.readFileSync(k.publicKey, 'utf8').trim() };
+}
+
+// Windows 下 Electron 里跑的 git 会拉起 Git 自带的 MSYS ssh，直接崩在
+// NtCreateDirectoryObject；统一改用系统 OpenSSH。
+function nativeSshBin() {
+  const native = path.join(
+    process.env.SystemRoot || 'C:\\Windows',
+    'System32',
+    'OpenSSH',
+    'ssh.exe',
+  );
+  if (process.platform === 'win32' && fs.existsSync(native)) return native.replace(/\\/g, '/');
+  return 'ssh';
+}
+
+// GIT_SSH_COMMAND 要经过 sh 解析，Electron 里 Git 自带的 MSYS sh 起不来；
+// GIT_SSH 只给可执行文件路径、不经过 shell，参数放进独立的 ssh config。
+function gitEnvWithKey(key) {
+  const home = path.join(app.getPath('userData'), 'keys', 'home');
+  const sshDir = path.join(home, '.ssh');
+  fs.mkdirSync(sshDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(sshDir, 'config'),
+    [
+      'Host *',
+      `  IdentityFile "${key.privateKey.replace(/\\/g, '/')}"`,
+      '  IdentitiesOnly yes',
+      '  BatchMode yes',
+      '  StrictHostKeyChecking accept-new',
+      `  UserKnownHostsFile "${key.knownHosts.replace(/\\/g, '/')}"`,
+      '  ConnectTimeout 15',
+      '',
+    ].join('\n'),
+    { mode: 0o600 },
+  );
+  const env = { ...process.env };
+  delete env.GIT_SSH_COMMAND;
+  env.GIT_SSH = nativeSshBin();
+  env.GIT_SSH_VARIANT = 'ssh';
+  env.HOME = home;
+  env.USERPROFILE = home;
+  return env;
+}
+
+const sshAuthReady = new Set();
+
+// 用面板已有的 SSH 连接（密码或私钥）把部署公钥装进服务器，并确认 sshd
+// 允许公钥认证。idempotent：已经在 authorized_keys 里就什么都不写。
+async function ensureServerAuth(profile) {
+  const key = ensureLocalDeployKey();
+  const cacheKey = `${profile.id}|${profile.host}|${profile.username}`;
+  if (sshAuthReady.has(cacheKey)) return key;
+
+  const b64 = Buffer.from(`${key.pub}\n`, 'utf8').toString('base64');
+  const script = [
+    'set -e',
+    'umask 077',
+    'mkdir -p "$HOME/.ssh"',
+    'chmod 700 "$HOME/.ssh"',
+    'touch "$HOME/.ssh/authorized_keys"',
+    'chmod 600 "$HOME/.ssh/authorized_keys"',
+    `KEY=$(printf %s '${b64}' | base64 -d)`,
+    'grep -qxF "$KEY" "$HOME/.ssh/authorized_keys" || printf \'%s\\n\' "$KEY" >> "$HOME/.ssh/authorized_keys"',
+    'if command -v sshd >/dev/null 2>&1; then',
+    '  if ! sshd -T 2>/dev/null | grep -qi "^pubkeyauthentication yes"; then',
+    '    mkdir -p /etc/ssh/sshd_config.d',
+    '    printf "PubkeyAuthentication yes\\n" > /etc/ssh/sshd_config.d/99-deploy-desk.conf',
+    '    if [ -f /etc/ssh/sshd_config ] && ! grep -qE "^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config.d/" /etc/ssh/sshd_config; then',
+    '      grep -q "^# deploy-desk public key" /etc/ssh/sshd_config || printf "\\n# deploy-desk public key\\nPubkeyAuthentication yes\\n" >> /etc/ssh/sshd_config',
+    '    fi',
+    '    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true',
+    '  fi',
+    'fi',
+    'if command -v sshd >/dev/null 2>&1; then sshd -T 2>/dev/null | grep -qi "^pubkeyauthentication yes" && echo pubkey-auth=yes || echo pubkey-auth=unknown; fi',
+  ].join('\n');
+
+  log('info', `$ 配置免密推送（部署密钥 → ${profile.username}@${profile.host}）\n`);
+  const r = await withConn(profile, (conn) => exec(conn, script, { silent: true }));
+  if (r.code !== 0) {
+    throw new Error((r.err || r.out || '').trim() || `写入 authorized_keys 失败（退出码 ${r.code}）`);
+  }
+  if (/pubkey-auth=unknown/.test(r.out)) {
+    log('warn', '  服务器未确认 PubkeyAuthentication=yes，推送可能仍要密码\n');
+  } else {
+    log('info', '  部署密钥已就绪\n');
+  }
+  sshAuthReady.add(cacheKey);
+  return key;
+}
+
+function bareRepoUrl(profile, project) {
+  return `ssh://${profile.username}@${profile.host}:${profile.port}/opt/git/${project}.git`;
+}
+
+// 全新仓库没有远端：面板按配置清单里的项目名直接补一个，省掉手敲
+// git remote add。已有同名远端则原样使用，绝不覆盖用户设置。
+async function ensureRemote(repoDir, remote, project, profile) {
+  if (!remote || !project) return null;
+  const existing = await runGit(repoDir, ['remote', 'get-url', remote]);
+  if (existing.code === 0) return { remote, url: existing.out.trim(), added: false };
+  const url = bareRepoUrl(profile, project);
+  const add = await runGit(repoDir, ['remote', 'add', remote, url]);
+  if (add.code !== 0) {
+    throw new Error(`添加远端失败: ${(add.err || add.out || '').trim() || `退出码 ${add.code}`}`);
+  }
+  return { remote, url, added: true };
 }
 
 // 发布页的「远端 / 分支」是仓库里真实存在的名字，不是让用户猜。
@@ -675,29 +831,58 @@ ipcMain.handle('git:inspect', async (_e, repoDir) => {
 
 // Electron spawns git outside MSYS; the Git-bundled ssh.exe dies there with
 // NtCreateDirectoryObject, so use the system OpenSSH client when available.
+// GIT_SSH（而不是 GIT_SSH_COMMAND）不经过 shell，避免再拉起 MSYS sh。
 function gitEnv() {
   const env = { ...process.env };
-  if (process.platform === 'win32' && !env.GIT_SSH_COMMAND) {
+  delete env.GIT_SSH_COMMAND;
+  if (process.platform === 'win32') {
     const native = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe');
-    if (fs.existsSync(native)) env.GIT_SSH_COMMAND = native.replace(/\\/g, '/');
+    if (fs.existsSync(native)) {
+      env.GIT_SSH = native.replace(/\\/g, '/');
+      env.GIT_SSH_VARIANT = 'ssh';
+    }
   }
   return env;
 }
 
-ipcMain.handle('deploy:push', async (_e, { repoDir, remote, branch }) => {
+ipcMain.handle('deploy:push', async (_e, { id, repoDir, remote, branch, project }) => {
   try {
     if (!repoDir || !fs.existsSync(path.join(repoDir, '.git'))) {
       throw new Error(`不是 git 仓库: ${repoDir}`);
     }
-    log('info', `\n$ git -C ${repoDir} push ${remote} ${branch}`);
+    const profile = id ? resolveProfile(id) : null;
+    let pushedRemote = String(remote || '').trim();
+
+    if (profile && project) {
+      if (!/^[a-z][a-z0-9-]{2,30}$/.test(project)) throw new Error(`项目名不合法: ${project}`);
+      pushedRemote = pushedRemote || 'deploy';
+      const r = await ensureRemote(repoDir, pushedRemote, project, profile);
+      if (r?.added) log('info', `  已添加远端 ${pushedRemote} → ${r.url}\n`);
+    }
+    if (!pushedRemote || !branch) throw new Error('没有可用的远端或分支');
+
+    let env = gitEnv();
+    if (profile) {
+      try {
+        const key = await ensureServerAuth(profile);
+        env = gitEnvWithKey(key);
+      } catch (err) {
+        if (profile.auth === 'password') {
+          throw new Error(`自动配置免密推送失败: ${err.message}`);
+        }
+        log('warn', `  免密推送配置失败，改用本机 SSH 配置: ${err.message}\n`);
+      }
+    }
+
+    log('info', `\n$ git -C ${repoDir} push ${pushedRemote} ${branch}\n`);
     return await new Promise((resolve) => {
-      const child = spawn('git', ['-C', repoDir, 'push', remote, branch], {
+      const child = spawn('git', ['-C', repoDir, 'push', pushedRemote, branch], {
         shell: process.platform === 'win32',
-        env: gitEnv(),
+        env,
       });
       child.stdout?.on('data', (d) => log('out', d.toString()));
       child.stderr?.on('data', (d) => log('err', d.toString()));
-      child.on('close', (code) => resolve({ ok: code === 0, code }));
+      child.on('close', (code) => resolve({ ok: code === 0, code, remote: pushedRemote }));
       child.on('error', (err) => resolve({ ok: false, error: err.message }));
     });
   } catch (err) {

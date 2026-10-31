@@ -15,8 +15,6 @@ GIT_BASE=${GIT_BASE:-/opt/git}
 SERVICE_PREFIX=${SERVICE_PREFIX:-nest-}
 SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
 WWW_DIR=${WWW_DIR:-/var/www}
-MYSQL_HOST=${MYSQL_HOST:-127.0.0.1}
-DB_PORT=3306
 
 [[ $(id -u) -eq 0 ]] || { echo 'run as root' >&2; exit 1; }
 [[ $NAME =~ ^[a-z][a-z0-9-]{2,30}$ ]] || { echo "invalid name: $NAME" >&2; exit 1; }
@@ -42,7 +40,9 @@ if [[ -f $APP/.env ]]; then
 fi
 
 echo "==> systemd service"
-if systemctl list-unit-files --type=service | grep -q "^$SERVICE\.service"; then
+# 不要用 `systemctl list-unit-files | grep -q`：grep 提前退出会让 systemctl
+# 收到 SIGPIPE，pipefail 把整条管道判成失败，服务就漏停了。
+if [[ -f $SYSTEMD_DIR/$SERVICE.service ]] || systemctl status "$SERVICE" >/dev/null 2>&1; then
   systemctl stop "$SERVICE" 2>/dev/null || true
   systemctl disable "$SERVICE" 2>/dev/null || true
   rm -f "$SYSTEMD_DIR/$SERVICE.service"
@@ -78,11 +78,14 @@ done
 
 echo "==> system user"
 if getent passwd "$NAME" >/dev/null; then
-  userdel "$NAME" 2>/dev/null || echo "    warning: userdel failed（有进程占用？）" >&2
+  if userdel "$NAME" 2>/dev/null; then
+    echo "    removed user $NAME"
+  else
+    echo "    warning: userdel failed（还有进程占用？先 systemctl stop ${SERVICE}）" >&2
+  fi
   if [[ -d /var/lib/$NAME ]]; then
     rm -rf "/var/lib/$NAME"
   fi
-  echo "    removed user $NAME"
 else
   echo "    none"
 fi
@@ -90,8 +93,9 @@ fi
 if [[ $WITH_DB == '--with-db' ]]; then
   echo "==> database"
   if [[ -n ${DB_NAME:-} && -n ${DB_USER:-} ]]; then
-    if MYSQL_PWD=${DB_PASS:-} mysql -h"$MYSQL_HOST" -P"$DB_PORT" -u"$DB_USER" \
-      -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; DROP USER IF EXISTS '${DB_USER}'@'127.0.0.1'; FLUSH PRIVILEGES;"; then
+    # 和 add-project.sh 一样走 root socket：应用账号只有自己库的权限，
+    # DROP USER 需要全局 CREATE USER 权限，用它删会失败。
+    if mysql -uroot -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; DROP USER IF EXISTS '${DB_USER}'@'127.0.0.1'; FLUSH PRIVILEGES;"; then
       echo "    dropped database $DB_NAME + user $DB_USER"
     else
       echo "    warning: database drop failed（账号权限或连接问题，可稍后手动删）" >&2

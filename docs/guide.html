@@ -463,10 +463,8 @@
     <ol>
       <li>先在本地<strong>提交代码</strong>。服务器部署的是仓库里的提交，不是工作区。</li>
       <li>点后端行的「发布」，选仓库目录。远端和分支是从这个仓库真实读出的下拉，默认选中指向该项目裸仓库的远端和服务器实际部署的分支；仓库目录按项目记住。</li>
-      <li>仓库还没有远端时，弹窗下方直接给出命令，在仓库目录执行一次：
-        <pre><code>git remote add deploy ssh://&lt;用户&gt;@&lt;主机&gt;:&lt;SSH端口&gt;/opt/git/&lt;项目&gt;.git</code></pre>
-      </li>
-      <li>点「<strong>git push 发布</strong>」。服务器钩子依次执行 install → build → migrate → restart → 健康检查（<code>/api/health</code>）。</li>
+      <li>仓库还没有远端时不用开终端：点「<strong>git push 发布</strong>」会按选中的项目自动添加 <code>deploy</code> 远端（<code>ssh://…/opt/git/&lt;项目&gt;.git</code>）。面板还会把自带的部署公钥装到服务器，必要时自动打开 sshd 的公钥登录，首次推送多花一两秒。</li>
+      <li>服务器钩子依次执行 install →（有 build 脚本才构建）→ migrate → restart → 健康检查（<code>/api/health</code>）。</li>
     </ol>
     <div class="callout warn">
       <p><b>push 成功 ≠ 发布成功。</b>钩子构建失败不会让 git push 失败。弹窗关闭后看「执行过程」里的 <code>remote:</code> 输出，那才是服务器端的构建日志；构建或迁移失败时，服务会继续跑上一个版本。</p>

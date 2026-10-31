@@ -94,16 +94,41 @@ git init --bare --initial-branch=master "$BARE" >/dev/null
 cat > "$BARE/hooks/post-receive" <<EOF
 #!/bin/sh
 export APP_DIR=$APP
+export BARE_DIR=$BARE
+export BRANCH=master
+export OWNER=$NAME
 export SERVICE=$SERVICE
 export PORT=$PORT
 exec $SHARED_HOOK
 EOF
 chmod 0755 "$BARE/hooks/post-receive"
 
+# 启动入口由仓库自己决定：package.json 的 main、dist/main.js、server.js 依次
+# 回退，最后才是 npm start。这样面板发布的项目不需要为了 systemd 改代码或
+# 额外塞一个 dist/main.js。
+echo "==> start entry"
+cat > "$APP/.deploy-start" <<EOF
+#!/bin/sh
+cd "\$(dirname "\$0")" || exit 1
+NODE="$NODE_BIN"
+if [ -f package.json ]; then
+  MAIN=\$("\$NODE" -p "require('./package.json').main || ''" 2>/dev/null)
+  if [ -n "\$MAIN" ] && [ -f "\$MAIN" ]; then exec "\$NODE" --enable-source-maps "\$MAIN"; fi
+fi
+for f in dist/main.js server.js index.js app.js; do
+  if [ -f "\$f" ]; then exec "\$NODE" --enable-source-maps "\$f"; fi
+done
+if [ -f package.json ] && command -v npm >/dev/null 2>&1; then exec npm start; fi
+echo "no start entry found: package.json main / dist/main.js / server.js / npm start" >&2
+exit 1
+EOF
+chown "$NAME:$NAME" "$APP/.deploy-start"
+chmod 755 "$APP/.deploy-start"
+
 echo "==> systemd unit"
 cat > "$SYSTEMD_DIR/$SERVICE.service" <<EOF
 [Unit]
-Description=$NAME (NestJS)
+Description=$NAME
 After=network.target mysql.service
 
 [Service]
@@ -111,7 +136,7 @@ Type=simple
 User=$NAME
 WorkingDirectory=$APP
 EnvironmentFile=$APP/.env
-ExecStart=$NODE_BIN --enable-source-maps dist/main.js
+ExecStart=$APP/.deploy-start
 Restart=on-failure
 RestartSec=3
 MemoryMax=$MEM_MAX
@@ -132,8 +157,15 @@ else
   CORS=${DOMAIN:+https://$DOMAIN}
   CORS=${CORS:-*}
   if [[ $DB_ENABLED == true ]]; then
+    # DATABASE_URL 给 Prisma/ORM 用；MYSQL_* 是裸 mysql2 项目最常用的变量名，
+    # 面板一并写好，应用不需要自己在服务器上补环境变量。
     DB_ENV="DATABASE_ENABLED=true
-DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB?connectionLimit=10&charset=utf8mb4\""
+DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB?connectionLimit=10&charset=utf8mb4\"
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=$DB_USER
+MYSQL_PASSWORD=$DB_PASS
+MYSQL_DATABASE=$DB"
   else
     DB_ENV='DATABASE_ENABLED=false'
   fi
