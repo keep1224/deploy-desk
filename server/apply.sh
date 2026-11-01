@@ -13,6 +13,8 @@
 #   * a file is ours only if it matches deploy-*.conf; anything else in conf.d
 #     (hand-written vhosts, certbot output) is never touched
 #   * a project dropped from projects.conf gets its file deleted -> real converge
+#   * a site toggled off in the panel sits in $DISABLED_DIR; apply rewrites it
+#     there and never moves it back, so 下线 survives every apply
 #   * nginx -t runs BEFORE the reload, and on failure this run's changes are
 #     rolled back, so a bad config can never take the whole server down
 #
@@ -32,6 +34,9 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 APPS_DIR=${APPS_DIR:-/opt/apps}
 SITES_DIR=${SITES_DIR:-/etc/nginx/conf.d}
 SITE_PREFIX=${SITE_PREFIX:-deploy-}
+# 面板里点了「下线」的站点，vhost 文件搬到这里（不在 conf.d 的 include 范围内）。
+# apply 时同名文件会被重新渲染到这里，而不是拉回 conf.d —— 下线状态跨应用保持。
+DISABLED_DIR=${DISABLED_DIR:-/etc/nginx/deploy-disabled}
 LEGACY_CONF=${LEGACY_CONF:-$SITES_DIR/projects.conf}
 # Per-project escape hatch: drop <name>.conf here and it gets included inside
 # that project's server block. Never written by this script, so it survives
@@ -184,18 +189,26 @@ site_write() { # <name> <type> <domain> <upstream> [listen]
   f=$(site_file "$1")
   SITE_FILES+=("$f")
 
-  site_render "$f.tmp" "$1" "$2" "$3" "${4:-}" "${5:-80}"
-  if [[ ! -f $f ]]; then
-    CREATED_SITES+=("$f")
-    mv "$f.tmp" "$f"
-    echo "    nginx created: $f"
+  # 下线中的站点：渲染结果直接写进 disabled 目录，conf.d 里不出现，
+  # 所以 apply 不会把用户刻意关掉的站点重新上线。
+  local target=$f
+  if [[ -f $DISABLED_DIR/$SITE_PREFIX$1.conf ]]; then
+    target=$DISABLED_DIR/$SITE_PREFIX$1.conf
+    install -d "$DISABLED_DIR"
+  fi
+
+  site_render "$target.tmp" "$1" "$2" "$3" "${4:-}" "${5:-80}"
+  if [[ ! -f $target ]]; then
+    CREATED_SITES+=("$target")
+    mv "$target.tmp" "$target"
+    echo "    nginx created: $target"
     CHANGED_NGINX=yes
-  elif cmp -s "$f.tmp" "$f"; then
-    rm -f "$f.tmp"
-    echo "    nginx unchanged: $f"
+  elif cmp -s "$target.tmp" "$target"; then
+    rm -f "$target.tmp"
+    echo "    nginx unchanged: $target"
   else
-    mv "$f.tmp" "$f"
-    echo "    nginx updated: $f"
+    mv "$target.tmp" "$target"
+    echo "    nginx updated: $target"
     CHANGED_NGINX=yes
   fi
   # 末行不能用 "test && echo" 的短路写法：无 snippet（默认）时该式返回 1，
@@ -318,6 +331,20 @@ for f in "$SITES_DIR/$SITE_PREFIX"*.conf; do
 done
 if [[ $STALE -eq 0 ]]; then
   echo '  none'
+fi
+
+# 项目从清单里删掉后，它下线时留下的 disabled 配置也一并清理
+if [[ -d $DISABLED_DIR ]]; then
+  for f in "$DISABLED_DIR/$SITE_PREFIX"*.conf; do
+    [[ -f $f ]] || continue
+    keep=no
+    for k in "${SITE_FILES[@]:-}"; do
+      [[ -n $k && "$SITES_DIR/$(basename "$f")" == "$k" ]] && { keep=yes; break; }
+    done
+    [[ $keep == yes ]] && continue
+    rm -f "$f"
+    echo "    nginx removed (disabled): $f"
+  done
 fi
 
 if ! nginx_commit; then

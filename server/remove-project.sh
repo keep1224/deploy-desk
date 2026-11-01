@@ -15,6 +15,8 @@ GIT_BASE=${GIT_BASE:-/opt/git}
 SERVICE_PREFIX=${SERVICE_PREFIX:-nest-}
 SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
 WWW_DIR=${WWW_DIR:-/var/www}
+DISABLED_DIR=${DISABLED_DIR:-/etc/nginx/deploy-disabled}
+SITE_PREFIX=${SITE_PREFIX:-deploy-}
 
 [[ $(id -u) -eq 0 ]] || { echo 'run as root' >&2; exit 1; }
 [[ $NAME =~ ^[a-z][a-z0-9-]{2,30}$ ]] || { echo "invalid name: $NAME" >&2; exit 1; }
@@ -75,6 +77,14 @@ for d in "$WWW_DIR/$NAME" "$WWW_DIR/$NAME.staging" "$WWW_DIR/$NAME.old"; do
     echo "    removed $d"
   fi
 done
+
+echo "==> disabled nginx site"
+if [[ -f $DISABLED_DIR/$SITE_PREFIX$NAME.conf ]]; then
+  rm -f "$DISABLED_DIR/$SITE_PREFIX$NAME.conf"
+  echo "    removed $DISABLED_DIR/$SITE_PREFIX$NAME.conf"
+else
+  echo "    none"
+fi
 
 echo "==> system user"
 if getent passwd "$NAME" >/dev/null; then

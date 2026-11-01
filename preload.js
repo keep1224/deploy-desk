@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   project: {
     remove: (payload) => ipcRenderer.invoke('project:remove', payload),
+    service: (payload) => ipcRenderer.invoke('project:service', payload),
+    site: (payload) => ipcRenderer.invoke('project:site', payload),
   },
   pickDir: () => ipcRenderer.invoke('dialog:pickDir'),
   clip: { write: (text) => ipcRenderer.invoke('clip:write', text) },

@@ -807,6 +807,24 @@ textarea {
 .st.bad { color: var(--err); }
 .st.bad::before { background: var(--err); }
 
+/* 状态徽标 + 行内启停按钮：挤在状态列一行里，不额外占宽 */
+.proj-tbl .st-line { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.proj-tbl .st-toggle {
+  flex: none;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 16px;
+  cursor: pointer;
+}
+.proj-tbl .st-toggle:hover { color: var(--text); border-color: var(--text-3); }
+.proj-tbl .st-toggle:disabled { opacity: .4; cursor: default; }
+
 .chip {
   display: inline-block;
   padding: 0 6px;

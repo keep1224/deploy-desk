@@ -4,7 +4,7 @@ const field = (form, name) => form.elements[name];
 
 const state = { profiles: [], activeId: null, canStoreSecrets: true };
 // declared up here because syncWebTargets() reads it while settings are applied
-const proj = { rows: [], server: new Map(), ports: new Set(), loaded: false, baseText: '', nginxLoaded: false, published: false };
+const proj = { rows: [], server: new Map(), ports: new Set(), services: new Set(), sitesOff: new Set(), loaded: false, baseText: '', nginxLoaded: false, published: false };
 const consoleEl = $('#console');
 
 const logTail = new Map();
@@ -332,6 +332,8 @@ $('#profileSelect').addEventListener('change', async (e) => {
   fillForm(state.profiles.find((p) => p.id === state.activeId));
   proj.server = new Map();
   proj.ports = new Set();
+  proj.services = new Set();
+  proj.sitesOff = new Set();
   proj.loaded = false;
   proj.published = false;
   repoInfo = null; // 换了服务器，远端是否指向这台机器要重新判断
@@ -607,10 +609,15 @@ function updateRowBad(idx) {
 function statusCellOf(row) {
   const td = document.createElement('td');
   td.className = 'c-st';
+  const line = document.createElement('div');
+  line.className = 'st-line';
   const st = document.createElement('span');
   st.className = 'st';
   const s = proj.server.get(row.name);
   const files = Number(s?.files);
+  const web = row.type === 'web';
+  // 启停按钮只跟着「服务器上真有的东西」出现，配置有误或还没应用的行不显示
+  let toggle = null;
   if (row.problems.length) {
     st.classList.add('bad');
     st.textContent = '配置有误';
@@ -619,22 +626,49 @@ function statusCellOf(row) {
     st.textContent = '未知';
   } else if (!proj.server.has(row.name)) {
     st.classList.add('warn');
-    st.textContent = row.type === 'web' ? '未发布' : '待初始化';
-  } else if (row.type === 'web' && Number.isFinite(files) && files === 0) {
+    st.textContent = web ? '未发布' : '待初始化';
+  } else if (web && proj.sitesOff.has(row.name)) {
+    st.classList.add('warn');
+    st.textContent = '已下线';
+    td.title = '站点已下线：域名打不开，网站文件都还在。点「上线」恢复，重新「应用更改」也会保持下线';
+    toggle = { label: '上线', run: (btn) => toggleSite(row.name, true, btn) };
+  } else if (!web && !proj.services.has(row.name)) {
+    st.classList.add('warn');
+    st.textContent = '已停止';
+    td.title = `nest-${row.name} 没在运行，点「启动」拉起（下发代码后一般会自动启动）`;
+    toggle = { label: '启动', run: (btn) => toggleService(row.name, 'start', btn) };
+  } else if (web && Number.isFinite(files) && files === 0) {
     // apply.sh 建了目录但没上传过内容
     st.classList.add('warn');
     st.textContent = '空目录';
     td.title = `/var/www/${row.name} 还没有内容，点行内「发布」上传 dist`;
-  } else if (row.type === 'api' && row.port !== '-' && proj.ports.size && !proj.ports.has(row.port)) {
+    toggle = { label: '下线', run: (btn) => toggleSite(row.name, false, btn) };
+  } else if (!web && row.port !== '-' && proj.ports.size && !proj.ports.has(row.port)) {
     st.classList.add('warn');
     st.textContent = '未监听';
     td.title = `端口 ${row.port} 没有在监听，服务可能没起来`;
+    toggle = { label: '停止', run: (btn) => toggleService(row.name, 'stop', btn) };
   } else {
     st.classList.add('ok');
-    st.textContent = row.type === 'web' ? '已发布' : '已部署';
-    if (row.type === 'web') td.title = `/var/www/${row.name}（${files} 个文件）`;
+    st.textContent = web ? '已发布' : '已部署';
+    if (web) td.title = `/var/www/${row.name}（${files} 个文件）`;
+    toggle = web
+      ? { label: '下线', run: (btn) => toggleSite(row.name, false, btn) }
+      : { label: '停止', run: (btn) => toggleService(row.name, 'stop', btn) };
   }
-  td.appendChild(st);
+  line.appendChild(st);
+  if (toggle) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'st-toggle';
+    btn.textContent = toggle.label;
+    btn.title = web
+      ? '只切 nginx 站点开关，不动网站文件'
+      : `systemctl ${toggle.label === '启动' ? 'start' : 'stop'} nest-${row.name}`;
+    btn.addEventListener('click', () => toggle.run(btn));
+    line.appendChild(btn);
+  }
+  td.appendChild(line);
   // 数据库实况并进状态列：api 行小字显示表数/大小/缺库
   if (row.type === 'api' && s) {
     const sub = document.createElement('div');
@@ -947,10 +981,57 @@ async function refreshServerState({ quiet = false } = {}) {
   }
   proj.server = new Map(r.rows.map((row) => [row.name, row]));
   proj.ports = new Set(r.ports || []);
+  proj.services = new Set(r.services || []);
+  proj.sitesOff = new Set(r.sitesOff || []);
   proj.loaded = true;
   renderProjects();
   renderGitHint();
   return true;
+}
+
+// 启停 API 服务：systemctl start/stop nest-<name>，成功后刷新「已停止/未监听/已部署」
+async function toggleService(name, action, btn) {
+  if (!state.activeId) {
+    appendLog('err', '先选择一个连接\n');
+    return;
+  }
+  const label = action === 'start' ? '启动' : '停止';
+  setBusy(btn, true, '…');
+  const r = await window.api.project.service({ id: state.activeId, name, action });
+  setBusy(btn, false);
+  if (!r.ok) {
+    const detail = String(r.out || '').trim().split('\n').filter(Boolean).slice(-3).join(' | ');
+    appendLog('err', `${name} ${label}失败: ${r.error || detail || `当前状态 ${r.state}`}\n`);
+    await refreshServerState({ quiet: true });
+    return;
+  }
+  appendLog('ok', `${name} 已${label}（nest-${name} ${r.state}）\n`);
+  await refreshServerState({ quiet: true });
+}
+
+// 上下线 web 站点：只挪 deploy-<name>.conf，nginx 先 -t 再 reload，网站文件不动
+async function toggleSite(name, on, btn) {
+  if (!state.activeId) {
+    appendLog('err', '先选择一个连接\n');
+    return;
+  }
+  if (!on) {
+    const ok = confirm(
+      `把 ${name} 的站点下线？\n\n域名会立刻打不开（nginx 配置移出 conf.d），网站文件不动。\n之后重新「应用更改」也会保持下线。`,
+    );
+    if (!ok) return;
+  }
+  setBusy(btn, true, '…');
+  const r = await window.api.project.site({ id: state.activeId, name, on });
+  setBusy(btn, false);
+  if (!r.ok) {
+    const detail = String(r.out || '').trim().split('\n').filter(Boolean).slice(-3).join(' | ');
+    appendLog('err', `${name} ${on ? '上线' : '下线'}失败: ${r.error || detail || `退出码 ${r.code}`}\n`);
+    await refreshServerState({ quiet: true });
+    return;
+  }
+  appendLog('ok', `${name} 站点已${on ? '上线' : '下线'}\n`);
+  await refreshServerState({ quiet: true });
 }
 
 async function runDbAction(action, app, btn) {

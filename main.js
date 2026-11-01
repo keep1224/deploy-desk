@@ -480,7 +480,7 @@ ipcMain.handle('conf:apply', async (_e, { id, text }) => {
 ipcMain.handle('db:list', async (_e, id) => {
   try {
     const profile = resolveProfile(id);
-    const { dbOut, webOut, portsOut, hookOut, webFilesOut } = await withConn(profile, async (conn) => {
+    const { dbOut, webOut, portsOut, hookOut, webFilesOut, svcOut } = await withConn(profile, async (conn) => {
       const db = await exec(conn, 'bash /opt/deploy/db.sh list 2>/dev/null', { silent: true });
       const web = await exec(
         conn,
@@ -501,7 +501,7 @@ ipcMain.handle('db:list', async (_e, id) => {
         `for d in /var/www/*/; do [ -d "$d" ] || continue; printf '%s\\t%s\\n' "$(basename "$d")" "$(find "$d" -type f 2>/dev/null | wc -l)"; done`,
         { silent: true },
       );
-      return { dbOut: db.out, webOut: web.out, portsOut: ports.out, hookOut: hooks.out, webFilesOut: webFiles.out };
+      return { dbOut: db.out, webOut: web.out, portsOut: ports.out, hookOut: hooks.out, webFilesOut: webFiles.out, svcOut: svc.out };
     });
     const webFiles = new Map();
     for (const line of webFilesOut.split('\n')) {
@@ -544,7 +544,21 @@ ipcMain.handle('db:list', async (_e, id) => {
         files: webFiles.get(name),
       });
     }
-    return { ok: true, rows, ports: portsOut.trim().split(/\s+/).filter(Boolean) };
+    return {
+      ok: true,
+      rows,
+      ports: portsOut.trim().split(/\s+/).filter(Boolean),
+      services: (svcOut.split('@@off')[0] || '')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((s) => s.replace(/^nest-/, '')),
+      sitesOff: (svcOut.split('@@off')[1] || '')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((f) => f.replace(/^deploy-/, '').replace(/\.conf$/, '')),
+    };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -631,6 +645,63 @@ ipcMain.handle('project:remove', async (_e, { id, name, withDb }) => {
       await exec(conn, 'chmod 755 /opt/deploy/remove-project.sh', { silent: true });
       return exec(conn, `bash /opt/deploy/remove-project.sh ${name}${withDb ? ' --with-db' : ''} 2>&1`);
     });
+    return { ok: r.code === 0, code: r.code, out: r.out };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// 行内启停：api = systemd 单元 nest-<name>；web = nginx 站点的上线/下线
+//（配置在 conf.d 和 deploy-disabled 之间搬，站点文件和构建产物都不动）
+ipcMain.handle('project:service', async (_e, { id, name, action }) => {
+  try {
+    const profile = resolveProfile(id);
+    if (!/^[a-z][a-z0-9-]{2,30}$/.test(name || '')) throw new Error('项目名不合法');
+    if (action !== 'start' && action !== 'stop') throw new Error('未知操作');
+    const unit = `nest-${name}`;
+    log('info', `\n$ systemctl ${action} ${unit}`);
+    const r = await withConn(profile, (conn) =>
+      exec(
+        conn,
+        `systemctl ${action} ${unit} 2>&1; echo "@@rc=$?"; systemctl is-active ${unit} 2>&1 || true`,
+      ),
+    );
+    const at = r.out.indexOf('@@rc=');
+    const out = at < 0 ? r.out : r.out.slice(0, at);
+    const tail = at < 0 ? '' : r.out.slice(at);
+    const rc = at < 0 ? NaN : Number((tail.match(/@@rc=(\d+)/) || [])[1]);
+    const state = at < 0
+      ? String(out).trim().split('\n').pop()
+      : String(tail.split('\n')[1] || '').trim();
+    // 退出码 + 最终状态都要对：服务可能秒退，stop 一个不存在的单元也不能算成功
+    const ok = rc === 0 && (action === 'start'
+      ? state === 'active' || state === 'activating'
+      : state === 'inactive' || state === 'failed');
+    return { ok, state, out: (out || '').trim() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('project:site', async (_e, { id, name, on }) => {
+  try {
+    const profile = resolveProfile(id);
+    if (!/^[a-z][a-z0-9-]{2,30}$/.test(name || '')) throw new Error('项目名不合法');
+    const file = `deploy-${name}.conf`;
+    const live = `/etc/nginx/conf.d/${file}`;
+    const away = `/etc/nginx/deploy-disabled/${file}`;
+    // 下线先搬走再 nginx -t，失败立刻搬回来：坏配置不上线，站点不会莫名 404
+    const cmd = on
+      ? `if [ ! -f ${away} ]; then echo '站点没有被下线，不需要上线'; exit 0; fi; ` +
+        `install -d /etc/nginx/deploy-disabled; mv ${away} ${live}; ` +
+        `if ! nginx -t 2>&1; then mv ${live} ${away} 2>/dev/null; echo 'nginx -t failed, reverted' >&2; exit 1; fi; ` +
+        `systemctl reload nginx && echo 'site on'`
+      : `if [ ! -f ${live} ]; then echo '站点配置文件不存在，先点「应用更改」'; exit 2; fi; ` +
+        `install -d /etc/nginx/deploy-disabled; mv ${live} ${away}; ` +
+        `if ! nginx -t 2>&1; then mv ${away} ${live} 2>/dev/null; echo 'nginx -t failed, reverted' >&2; exit 1; fi; ` +
+        `systemctl reload nginx && echo 'site off'`;
+    log('info', `\n$ nginx ${on ? '上线' : '下线'} ${file}`);
+    const r = await withConn(profile, (conn) => exec(conn, cmd));
     return { ok: r.code === 0, code: r.code, out: r.out };
   } catch (err) {
     return { ok: false, error: err.message };

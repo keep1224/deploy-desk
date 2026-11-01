@@ -409,7 +409,7 @@
           <tr><td>项目</td><td>名称同时用作目录名、系统用户、服务名和库名（<code>-</code> 换成 <code>_</code>）。3–31 位，小写字母开头，只能含小写字母、数字和 <code>-</code></td></tr>
           <tr><td>类型</td><td><span class="tag mute">web</span> 静态前端，由 nginx 提供服务；<span class="tag mute">api</span> Node 后端，跑 systemd 服务</td></tr>
           <tr><td>端口</td><td><b>api</b>：后端自己监听的端口，留空从 3001 起自动分配，只绑 <code>127.0.0.1</code>；<b>web</b>：nginx 对外的 listen 端口，留空就是 80。整张表的端口不能重复</td></tr>
-          <tr><td>状态</td><td>见下方状态表；api 行的小字显示表数、大小或缺库；web 行的小字是站点地址（nginx <code>server_name</code>），<b>点它就能改</b>——不填就用当前连接的主机 IP</td></tr>
+          <tr><td>状态</td><td>见下方状态表；状态右边的小按钮就是启停（api：启动/停止服务，web：上线/下线站点）；api 行的小字显示表数、大小或缺库；web 行的小字是站点地址（nginx <code>server_name</code>），<b>点它就能改</b>——不填就用当前连接的主机 IP</td></tr>
           <tr><td>建库</td><td>仅 api：<b>自动建库</b>（库名=项目名），<b>不建库</b>用于纯接口项目；web 恒为 <code>—</code></td></tr>
           <tr><td>上游 api</td><td>仅 web：选一个后端后，<code>/api/</code> 会反代到它；不反代就选「不反代」</td></tr>
           <tr><td>操作</td><td>web 行有「复制」（站点地址，含端口）；每行有「发布」（发布代码，不含数据库）；api 行另有「数据库」组：<b>迁移 / 备份 / 导入 SQL</b>，只操作数据库；行尾 <b>✕</b> 移除</td></tr>
@@ -426,6 +426,8 @@
           <tr><td><span class="tag warn">未发布</span></td><td>前端站点目录还没建</td><td>点「应用更改」，再发布 dist</td></tr>
           <tr><td><span class="tag warn">空目录</span></td><td>前端目录建了，但里面没有文件</td><td>点该行「发布」上传 dist</td></tr>
           <tr><td><span class="tag ok">已部署 / 已发布</span></td><td>正常</td><td>—</td></tr>
+          <tr><td><span class="tag warn">已停止</span></td><td>api 的 systemd 服务没在运行</td><td>点右边「启动」；重新下发代码后一般也会自动起来</td></tr>
+          <tr><td><span class="tag warn">已下线</span></td><td>web 站点被手动关掉：域名打不开，网站文件都还在</td><td>点右边「上线」恢复</td></tr>
           <tr><td><span class="tag warn">未监听</span></td><td>api 的端口没在监听，服务可能没起来</td><td>查服务日志，核对端口后重新应用</td></tr>
           <tr><td><span class="tag bad">缺库 库名</span></td><td>数据库还没建出来</td><td>点「应用更改」；核对「建库」列</td></tr>
           <tr><td><span class="tag bad">配置有误</span></td><td>名称、端口、域名或上游有问题，整行标红</td><td>悬停看原因，改完再应用</td></tr>
@@ -433,6 +435,7 @@
         </tbody>
       </table>
     </div>
+    <p>启停只改运行状态，不碰代码和数据库：api 走 <code>systemctl start/stop nest-&lt;项目&gt;</code>；web 把 <code>deploy-&lt;项目&gt;.conf</code> 在 <code>/etc/nginx/conf.d</code> 和 <code>/etc/nginx/deploy-disabled</code> 之间挪，挪完先 <code>nginx -t</code>，不合格自动挪回去。下线不删配置：之后重新「应用更改」也保持下线，点「上线」才恢复。</p>
     <p>配置有误时「应用更改」会被拦下。刚发布完状态没变化，点一下「刷新状态」。</p>
 
     <h3>一台服务器放多个前端</h3>
